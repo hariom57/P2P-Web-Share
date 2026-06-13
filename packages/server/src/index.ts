@@ -25,12 +25,44 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: Date.now(), activeRooms: roomManager.getActiveRoomCount() });
 });
 
+function emitRoomError(socket: ReturnType<typeof io['emit']>, code: string, message: string): void {
+  socket.emit('room-error', { code, message });
+}
+
+function validateRoom(socket: ReturnType<typeof io['emit']>, roomId: string): string | null {
+  const room = roomManager.getRoom(roomId);
+  if (!room) {
+    emitRoomError(socket, 'INVALID_ROOM', `Room ${roomId} does not exist`);
+    return null;
+  }
+  if (Date.now() > room.expiresAt) {
+    emitRoomError(socket, 'ROOM_EXPIRED', `Room ${roomId} has expired`);
+    return null;
+  }
+  return roomId;
+}
+
+function forwardToPeer(
+  socket: ReturnType<typeof io['emit']>,
+  event: string,
+  roomId: string,
+  payload: Record<string, unknown>,
+): void {
+  const otherPeerId = roomManager.getOtherPeerSocketId(roomId, socket.id);
+  if (!otherPeerId) {
+    emitRoomError(socket, 'NO_PEER', 'No other peer in room');
+    return;
+  }
+  socket.to(otherPeerId).emit(event, payload);
+}
+
 io.on('connection', (socket) => {
   console.log(`[connect] socket=${socket.id}`);
 
   socket.on('create-room', () => {
     try {
       const room = roomManager.createRoom();
+      roomManager.joinRoom(room.id, socket.id);
       socket.join(room.id);
       socket.emit('room-created', {
         roomId: room.id,
@@ -38,10 +70,11 @@ io.on('connection', (socket) => {
       });
       console.log(`[create-room] socket=${socket.id} room=${room.id}`);
     } catch (err) {
-      socket.emit('room-error', {
-        code: 'CREATE_FAILED',
-        message: err instanceof Error ? err.message : 'Failed to create room',
-      });
+      emitRoomError(
+        socket,
+        'CREATE_FAILED',
+        err instanceof Error ? err.message : 'Failed to create room',
+      );
     }
   });
 
@@ -59,12 +92,13 @@ io.on('connection', (socket) => {
       console.log(`[join-room] socket=${socket.id} room=${room.id} peers=${peerCount}`);
     } catch (err) {
       if (err instanceof RoomError) {
-        socket.emit('room-error', { code: err.code, message: err.message });
+        emitRoomError(socket, err.code, err.message);
       } else {
-        socket.emit('room-error', {
-          code: 'JOIN_FAILED',
-          message: err instanceof Error ? err.message : 'Failed to join room',
-        });
+        emitRoomError(
+          socket,
+          'JOIN_FAILED',
+          err instanceof Error ? err.message : 'Failed to join room',
+        );
       }
     }
   });
@@ -78,6 +112,50 @@ io.on('connection', (socket) => {
       });
       console.log(`[leave-room] socket=${socket.id} room=${data.roomId} remaining=${remainingPeers}`);
     }
+  });
+
+  socket.on('offer', (data: { roomId: string; offer: RTCSessionDescriptionInit }) => {
+    if (!validateRoom(socket, data.roomId)) return;
+    forwardToPeer(socket, 'offer', data.roomId, { offer: data.offer });
+    console.log(`[offer] socket=${socket.id} room=${data.roomId}`);
+  });
+
+  socket.on('answer', (data: { roomId: string; answer: RTCSessionDescriptionInit }) => {
+    if (!validateRoom(socket, data.roomId)) return;
+    forwardToPeer(socket, 'answer', data.roomId, { answer: data.answer });
+    console.log(`[answer] socket=${socket.id} room=${data.roomId}`);
+  });
+
+  socket.on('ice-candidate', (data: { roomId: string; candidate: RTCIceCandidateInit }) => {
+    if (!validateRoom(socket, data.roomId)) return;
+    forwardToPeer(socket, 'ice-candidate', data.roomId, { candidate: data.candidate });
+  });
+
+  socket.on('file-metadata', (data: { roomId: string; fileName: string; fileSize: number; fileType: string }) => {
+    if (!validateRoom(socket, data.roomId)) return;
+    roomManager.setFileMetadata(data.roomId, {
+      fileName: data.fileName,
+      fileSize: data.fileSize,
+      fileType: data.fileType,
+    });
+    forwardToPeer(socket, 'file-metadata', data.roomId, {
+      fileName: data.fileName,
+      fileSize: data.fileSize,
+      fileType: data.fileType,
+    });
+    console.log(`[file-metadata] socket=${socket.id} room=${data.roomId} file=${data.fileName}`);
+  });
+
+  socket.on('transfer-complete', (data: { roomId: string; sha256Hash: string }) => {
+    if (!validateRoom(socket, data.roomId)) return;
+    forwardToPeer(socket, 'transfer-complete', data.roomId, { sha256Hash: data.sha256Hash });
+    console.log(`[transfer-complete] socket=${socket.id} room=${data.roomId}`);
+  });
+
+  socket.on('transfer-error', (data: { roomId: string; error: string }) => {
+    if (!validateRoom(socket, data.roomId)) return;
+    forwardToPeer(socket, 'transfer-error', data.roomId, { error: data.error });
+    console.log(`[transfer-error] socket=${socket.id} room=${data.roomId} error=${data.error}`);
   });
 
   socket.on('disconnect', () => {
