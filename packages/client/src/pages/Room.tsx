@@ -3,7 +3,8 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { connectSocket } from '../services/socket';
 import { useRoomStore } from '../stores/roomStore';
 import { useWebRTC } from '../hooks/useWebRTC';
-import { setActiveDataChannel } from '../services/data-channel-registry';
+import { setActiveDataChannel, setEncryptionKey } from '../services/data-channel-registry';
+import { importKey } from '../services/encryption';
 
 function Room() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -72,6 +73,14 @@ function Room() {
       socket.off('room-expired', handleRoomExpired);
     };
   }, [roomIdFull, isSender, startConnection]);
+
+  useEffect(() => {
+    const hash = window.location.hash;
+    const match = hash.match(/key=([A-Za-z0-9+/=]+)/);
+    if (match) {
+      importKey(match[1]).then(setEncryptionKey);
+    }
+  }, []);
 
   useEffect(() => {
     return () => {

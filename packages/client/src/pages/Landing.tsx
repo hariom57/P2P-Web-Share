@@ -2,7 +2,8 @@ import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { connectSocket } from '../services/socket';
 import { useRoomStore } from '../stores/roomStore';
-import { setActiveFile } from '../services/data-channel-registry';
+import { setActiveFile, setEncryptionKey } from '../services/data-channel-registry';
+import { generateEncryptionKey, exportKey } from '../services/encryption';
 
 function Landing() {
   const navigate = useNavigate();
@@ -32,11 +33,15 @@ function Landing() {
     if (e.target.files) handleFiles(e.target.files);
   }, [handleFiles]);
 
-  const createRoom = useCallback(() => {
+  const createRoom = useCallback(async () => {
     if (isCreating || !selectedFile) return;
     setIsCreating(true);
     setCreateError(null);
     setRoomPhase('creating');
+
+    const key = await generateEncryptionKey();
+    setEncryptionKey(key);
+    const keyBase64 = await exportKey(key);
 
     const socket = connectSocket();
     if (!socket.connected) socket.connect();
@@ -44,7 +49,7 @@ function Landing() {
     socket.once('room-created', (data: { roomId: string }) => {
       setActiveFile(selectedFile);
       setRoomPhase('waiting');
-      navigate(`/room/${data.roomId}`, {
+      navigate(`/room/${data.roomId}#key=${keyBase64}`, {
         state: {
           fileName: selectedFile.name,
           fileSize: selectedFile.size,
