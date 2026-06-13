@@ -4,6 +4,7 @@ import { MessageType, PROTOCOL_CONSTANTS } from '@p2p-share/shared';
 import type { DataChannelMessage, FileMetaMessage } from '@p2p-share/shared';
 import { FileChunker } from '../services/file-chunker';
 import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../services/sha256';
+import { reassembleFile, triggerDownload } from '../services/file-download';
 import { useTransferStore } from '../stores/transferStore';
 import { useUIStore } from '../stores/uiStore';
 
@@ -258,6 +259,9 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
               match = areHashesEqual(receiverHash, msg.senderHash);
               if (match) {
                 transferStore.setTransferPhase('complete');
+                const blob = reassembleFile(receivedChunks, meta.totalChunks, meta.mimeType);
+                triggerDownload(blob, meta.fileName);
+                addNotification({ type: 'success', title: `Downloaded: ${meta.fileName}`, durationMs: 5000 });
               } else {
                 transferStore.setReceiverHash(
                   Array.from(receiverHash).map((b) => b.toString(16).padStart(2, '0')).join(''),
