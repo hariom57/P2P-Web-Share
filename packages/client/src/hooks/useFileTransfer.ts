@@ -5,6 +5,8 @@ import type { DataChannelMessage, FileMetaMessage } from '@p2p-share/shared';
 import { FileChunker } from '../services/file-chunker';
 import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../services/sha256';
 import { reassembleFile, triggerDownload } from '../services/file-download';
+import { encryptChunk, decryptChunk } from '../services/encryption';
+import { getEncryptionKey } from '../services/data-channel-registry';
 import { useTransferStore } from '../stores/transferStore';
 import { useUIStore } from '../stores/uiStore';
 
@@ -115,10 +117,13 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
       const chunk = await chunker.readNextChunk();
       if (!chunk) break;
 
+      const key = getEncryptionKey();
+      const chunkData = key ? await encryptChunk(chunk.data, key, chunk.sequence) : chunk.data;
+
       const encoded = encodeMessage({
         type: MessageType.CHUNK,
         sequence: chunk.sequence,
-        data: chunk.data,
+        data: chunkData,
       });
 
       await waitForBufferedAmountLow();
@@ -247,19 +252,27 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
 
         case MessageType.VERIFY_REQUEST: {
           const meta = fileMetaRef.current;
+          const key = getEncryptionKey();
           let match = false;
           if (meta) {
             const allChunks: Uint8Array[] = [];
             for (let i = 0; i < meta.totalChunks; i++) {
-              const chunk = receivedChunks.get(i);
-              if (chunk) allChunks.push(chunk);
+              const raw = receivedChunks.get(i);
+              if (raw) {
+                const decrypted = key ? await decryptChunk(raw, key, i) : raw;
+                allChunks.push(decrypted);
+              }
             }
             if (allChunks.length === meta.totalChunks) {
               const receiverHash = await computeSHA256FromChunks(allChunks);
               match = areHashesEqual(receiverHash, msg.senderHash);
               if (match) {
                 transferStore.setTransferPhase('complete');
-                const blob = reassembleFile(receivedChunks, meta.totalChunks, meta.mimeType);
+                const decryptedChunks = new Map<number, Uint8Array>();
+                for (let i = 0; i < meta.totalChunks; i++) {
+                  decryptedChunks.set(i, allChunks[i]);
+                }
+                const blob = reassembleFile(decryptedChunks, meta.totalChunks, meta.mimeType);
                 triggerDownload(blob, meta.fileName);
                 addNotification({ type: 'success', title: `Downloaded: ${meta.fileName}`, durationMs: 5000 });
               } else {
