@@ -3,6 +3,7 @@ import { encodeMessage, decodeMessage, ProtocolError } from '@p2p-share/shared';
 import { MessageType, PROTOCOL_CONSTANTS } from '@p2p-share/shared';
 import type { DataChannelMessage, FileMetaMessage } from '@p2p-share/shared';
 import { FileChunker } from '../services/file-chunker';
+import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../services/sha256';
 import { useTransferStore } from '../stores/transferStore';
 import { useUIStore } from '../stores/uiStore';
 
@@ -59,6 +60,13 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
     setIsTransferring(true);
     setError(null);
 
+    transferStore.setTransferPhase('hashing');
+
+    const fileBuffer = await file.arrayBuffer();
+    const fileHash = await computeSHA256(fileBuffer);
+
+    transferStore.setSha256Hash(Array.from(fileHash).map((b) => b.toString(16).padStart(2, '0')).join(''));
+
     const chunker = new FileChunker(file);
     chunkerRef.current = chunker;
 
@@ -75,8 +83,6 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
       totalChunks,
       chunkSizeBytes: chunkSize,
     });
-
-    const fileHash = new Uint8Array(32);
     const metaMsg: FileMetaMessage = {
       type: MessageType.FILE_META,
       fileName: chunker.getFileName(),
@@ -192,7 +198,7 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
     dataChannel.binaryType = 'arraybuffer';
     const receivedChunks = new Map<number, Uint8Array>();
 
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       if (!(event.data instanceof ArrayBuffer)) return;
 
       let msg: DataChannelMessage;
@@ -240,16 +246,30 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
 
         case MessageType.VERIFY_REQUEST: {
           const meta = fileMetaRef.current;
+          let match = false;
           if (meta) {
             const allChunks: Uint8Array[] = [];
             for (let i = 0; i < meta.totalChunks; i++) {
               const chunk = receivedChunks.get(i);
               if (chunk) allChunks.push(chunk);
             }
+            if (allChunks.length === meta.totalChunks) {
+              const receiverHash = await computeSHA256FromChunks(allChunks);
+              match = areHashesEqual(receiverHash, msg.senderHash);
+              if (match) {
+                transferStore.setTransferPhase('complete');
+              } else {
+                transferStore.setReceiverHash(
+                  Array.from(receiverHash).map((b) => b.toString(16).padStart(2, '0')).join(''),
+                );
+                transferStore.setTransferPhase('error');
+                transferStore.setTransferError('Hash mismatch');
+              }
+            }
           }
           dataChannel.send(encodeMessage({
             type: MessageType.VERIFY_RESPONSE,
-            match: true,
+            match,
           }));
           break;
         }
