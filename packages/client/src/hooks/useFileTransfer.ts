@@ -7,14 +7,16 @@ import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../servi
 import { reassembleFile, triggerDownload } from '../services/file-download';
 import { encryptChunk, decryptChunk } from '../services/encryption';
 import { getEncryptionKey } from '../services/data-channel-registry';
+import { saveCheckpoint, deleteCheckpoint, getCheckpoint } from '../services/checkpoint-store';
 import { useTransferStore } from '../stores/transferStore';
 import { useUIStore } from '../stores/uiStore';
 
 interface UseFileTransferOptions {
   dataChannel: RTCDataChannel | null;
+  roomId?: string;
 }
 
-export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
+export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOptions) {
   const [error, setError] = useState<string | null>(null);
   const [isTransferring, setIsTransferring] = useState(false);
   const [receivedFileMeta, setReceivedFileMeta] = useState<FileMetaMessage | null>(null);
@@ -25,9 +27,15 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
   const cancelledRef = useRef(false);
   const sendResolveRef = useRef<((value: boolean) => void) | null>(null);
   const fileMetaRef = useRef<FileMetaMessage | null>(null);
+  const lastSaveRef = useRef(0);
+  const roomIdRef = useRef('');
 
   const transferStore = useTransferStore();
   const addNotification = useUIStore((s) => s.addNotification);
+
+  useEffect(() => {
+    roomIdRef.current = roomId;
+  }, [roomId]);
 
   const sendMessage = useCallback((msg: ArrayBuffer) => {
     if (dataChannel?.readyState !== 'open') return false;
@@ -109,9 +117,38 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
       return;
     }
 
+    if (roomId) {
+      await saveCheckpoint(roomId, {
+        role: 'sender',
+        fileName: chunker.getFileName(),
+        fileSize: chunker.getFileSize(),
+        totalChunks,
+        lastSentChunk: 0,
+        lastReceivedChunk: 0,
+        lastAcknowledgedChunk: 0,
+        totalBytesSent: 0,
+        timestamp: Date.now(),
+      });
+    }
+
     transferStore.setTransferPhase('transferring');
     inFlightRef.current.clear();
     windowSizeRef.current = PROTOCOL_CONSTANTS.MIN_WINDOW_SIZE;
+
+    if (roomId) {
+      const cp = await getCheckpoint(roomId);
+      if (cp && cp.lastAcknowledgedChunk > 0) {
+        chunker.seek(cp.lastAcknowledgedChunk + 1);
+        const skippedBytes = (cp.lastAcknowledgedChunk + 1) * chunkSize;
+        transferStore.setProgress({
+          chunksSent: cp.lastAcknowledgedChunk + 1,
+          chunksAcknowledged: cp.lastAcknowledgedChunk + 1,
+          bytesTransferred: skippedBytes,
+          lastAcknowledgedChunk: cp.lastAcknowledgedChunk,
+        });
+        inFlightRef.current.clear();
+      }
+    }
 
     while (!cancelledRef.current) {
       const chunk = await chunker.readNextChunk();
@@ -139,6 +176,20 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
         transferStore.incrementChunksSent();
         transferStore.updateSpeed(chunk.data.length, 100);
         transferStore.setProgress({ lastAcknowledgedChunk: -1 });
+        if (roomId && chunk.sequence % 10 === 0) {
+          const p = transferStore;
+          saveCheckpoint(roomId, {
+            role: 'sender',
+            fileName: chunker.getFileName(),
+            fileSize: chunker.getFileSize(),
+            totalChunks,
+            lastSentChunk: chunk.sequence,
+            lastReceivedChunk: 0,
+            lastAcknowledgedChunk: p.lastAcknowledgedChunk,
+            totalBytesSent: p.bytesTransferred,
+            timestamp: Date.now(),
+          });
+        }
       }
     }
 
@@ -178,6 +229,9 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
     }
 
     setIsTransferring(false);
+    if (roomIdRef.current) {
+      deleteCheckpoint(roomIdRef.current);
+    }
   }, [dataChannel, transferStore, addNotification, sendMessage, waitForBufferedAmountLow]);
 
   const cancel = useCallback(() => {
@@ -196,6 +250,9 @@ export function useFileTransfer({ dataChannel }: UseFileTransferOptions) {
     }
     transferStore.setTransferPhase('cancelled');
     setIsTransferring(false);
+    if (roomIdRef.current) {
+      deleteCheckpoint(roomIdRef.current);
+    }
   }, [dataChannel, transferStore]);
 
   useEffect(() => {

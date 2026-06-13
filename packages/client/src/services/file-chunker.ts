@@ -84,6 +84,17 @@ export class FileChunker {
     });
   }
 
+  getCurrentSequence(): number {
+    return this.sequence;
+  }
+
+  seek(chunkIndex: number): void {
+    if (chunkIndex < 0) chunkIndex = 0;
+    if (chunkIndex > this.totalChunks) chunkIndex = this.totalChunks;
+    this.sequence = chunkIndex;
+    this.offset = chunkIndex * this.chunkSize;
+  }
+
   getProgress(): ChunkProgress {
     return {
       bytesRead: this.offset,

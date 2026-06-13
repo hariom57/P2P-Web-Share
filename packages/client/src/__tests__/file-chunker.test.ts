@@ -129,4 +129,35 @@ describe('FileChunker', () => {
       expect(initial.percent).toBe(0);
     });
   });
+
+  describe('seek', () => {
+    it('should skip chunks when seeking forward', async () => {
+      const file = createMockFile('test.bin', 200);
+      const chunker = new FileChunker(file, 64);
+      expect(chunker.getCurrentSequence()).toBe(0);
+
+      chunker.seek(2);
+      expect(chunker.getCurrentSequence()).toBe(2);
+
+      const chunk = await chunker.readNextChunk();
+      expect(chunk).not.toBeNull();
+      expect(chunk!.sequence).toBe(2);
+    });
+
+    it('should clamp negative seek to 0', () => {
+      const file = createMockFile('test.bin', 100);
+      const chunker = new FileChunker(file, 64);
+      chunker.seek(-5);
+      expect(chunker.getCurrentSequence()).toBe(0);
+    });
+
+    it('should clamp seek beyond total to end', async () => {
+      const file = createMockFile('test.bin', 64);
+      const chunker = new FileChunker(file, 64);
+      chunker.seek(100);
+
+      const chunk = await chunker.readNextChunk();
+      expect(chunk).toBeNull();
+    });
+  });
 });

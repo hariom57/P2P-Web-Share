@@ -19,7 +19,7 @@ function Transfer() {
       setActiveFile(null);
     };
   }, []);
-  const { sendFile, cancel, isTransferring, error } = useFileTransfer({ dataChannel });
+  const { sendFile, cancel, isTransferring, error } = useFileTransfer({ dataChannel, roomId });
 
   const transferPhase = useTransferStore((s) => s.transferPhase);
   const progress = useTransferStore((s) => s.progressPercent);
