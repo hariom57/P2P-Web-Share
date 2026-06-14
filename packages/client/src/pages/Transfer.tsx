@@ -1,24 +1,37 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFileTransfer } from '../hooks/useFileTransfer';
 import { useTransferStore } from '../stores/transferStore';
-import { getActiveDataChannel, getActiveFile, setActiveFile } from '../services/data-channel-registry';
+import { useResumeStore } from '../stores/resumeStore';
+import { getActiveDataChannel, getActiveFile, setActiveFile, getResumeAfterConnect, setResumeAfterConnect } from '../services/data-channel-registry';
 
 function Transfer() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const fileState = location.state as { fileName?: string; fileSize?: number; fileType?: string } | null;
+  const fileState = location.state as { fileName?: string; fileSize?: number; fileType?: string; isResuming?: boolean } | null;
   const isSender = !!fileState?.fileName;
+  const isResuming = fileState?.isResuming || getResumeAfterConnect();
+  const [waitingForFile, setWaitingForFile] = useState(isSender && isResuming && !getActiveFile());
   const hasStartedRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { resumeAction, clearResumableTransfer } = useResumeStore();
 
   const dataChannel = getActiveDataChannel();
 
   useEffect(() => {
     return () => {
       setActiveFile(null);
+      setResumeAfterConnect(false);
     };
   }, []);
+
+  useEffect(() => {
+    if (resumeAction === 'resuming') {
+      clearResumableTransfer();
+    }
+  }, [resumeAction, clearResumableTransfer]);
+
   const { sendFile, cancel, isTransferring, error } = useFileTransfer({ dataChannel, roomId });
 
   const transferPhase = useTransferStore((s) => s.transferPhase);
@@ -48,10 +61,23 @@ function Transfer() {
       const file = getActiveFile();
       if (file) {
         hasStartedRef.current = true;
+        setWaitingForFile(false);
         sendFile(file);
+      } else if (isResuming) {
+        setWaitingForFile(true);
       }
     }
-  }, [isSender, dataChannel, sendFile]);
+  }, [isSender, dataChannel, sendFile, isResuming]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && dataChannel?.readyState === 'open') {
+      setActiveFile(file);
+      setWaitingForFile(false);
+      hasStartedRef.current = true;
+      sendFile(file);
+    }
+  }, [dataChannel, sendFile]);
 
   if (!dataChannel) {
     return (
@@ -153,6 +179,27 @@ function Transfer() {
           >
             Cancel
           </button>
+        )}
+
+        {waitingForFile && (
+          <div className="mt-6 p-6 border-2 border-dashed border-blue-500/50 rounded-xl bg-blue-500/5">
+            <p className="text-blue-400 font-medium mb-2">Resume Transfer</p>
+            <p className="text-gray-400 text-sm mb-4">
+              Select the original file to resume sending
+            </p>
+            <button
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Select File
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+          </div>
         )}
       </div>
     </div>

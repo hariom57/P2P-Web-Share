@@ -41,7 +41,7 @@ export async function saveCheckpoint(roomId: string, data: CheckpointData): Prom
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put({ roomId, ...data, timestamp: Date.now() } as StoredCheckpoint);
+    tx.objectStore(STORE_NAME).put({ roomId, ...data } as StoredCheckpoint);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
   });
@@ -78,6 +78,28 @@ export async function getAllCheckpoints(): Promise<(CheckpointData & { roomId: s
     request.onsuccess = () => { db.close(); resolve(request.result || []); };
     request.onerror = () => { db.close(); reject(request.error); };
   });
+}
+
+const STALE_TTL_MS = 30 * 60 * 1000;
+
+export function getCheckpointAge(checkpoint: { timestamp: number }): number {
+  return Date.now() - checkpoint.timestamp;
+}
+
+export function isCheckpointStale(checkpoint: { timestamp: number }): boolean {
+  return getCheckpointAge(checkpoint) > STALE_TTL_MS;
+}
+
+export async function cleanupStaleCheckpoints(): Promise<number> {
+  const all = await getAllCheckpoints();
+  let cleaned = 0;
+  for (const cp of all) {
+    if (isCheckpointStale(cp)) {
+      await deleteCheckpoint(cp.roomId);
+      cleaned++;
+    }
+  }
+  return cleaned;
 }
 
 export async function clearAllCheckpoints(): Promise<void> {

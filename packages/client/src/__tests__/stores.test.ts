@@ -3,6 +3,7 @@ import { useRoomStore } from '../stores/roomStore';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useTransferStore } from '../stores/transferStore';
 import { useUIStore } from '../stores/uiStore';
+import { useResumeStore } from '../stores/resumeStore';
 
 describe('roomStore', () => {
   beforeEach(() => {
@@ -158,5 +159,52 @@ describe('uiStore', () => {
 
     useUIStore.getState().closeModal();
     expect(useUIStore.getState().activeModal).toBeNull();
+  });
+});
+
+describe('resumeStore', () => {
+  beforeEach(() => {
+    useResumeStore.getState().clearResumableTransfer();
+  });
+
+  it('should start with no resumable transfer', () => {
+    const state = useResumeStore.getState();
+    expect(state.hasResumableTransfer).toBe(false);
+    expect(state.role).toBeNull();
+    expect(state.resumeAction).toBeNull();
+  });
+
+  it('should store resumable transfer metadata', () => {
+    useResumeStore.getState().setResumableTransfer({
+      role: 'sender',
+      fileName: 'test.bin',
+      fileSize: 1000,
+      totalChunks: 20,
+      lastReceivedChunk: 10,
+      lastActivity: Date.now(),
+    });
+
+    const state = useResumeStore.getState();
+    expect(state.hasResumableTransfer).toBe(true);
+    expect(state.role).toBe('sender');
+    expect(state.fileName).toBe('test.bin');
+    expect(state.fileSize).toBe(1000);
+    expect(state.totalChunks).toBe(20);
+    expect(state.lastReceivedChunk).toBe(10);
+  });
+
+  it('should set resume action', () => {
+    useResumeStore.getState().setResumableTransfer({
+      role: 'receiver', fileName: 'a.txt', fileSize: 100,
+      totalChunks: 5, lastReceivedChunk: 2, lastActivity: Date.now(),
+    });
+    expect(useResumeStore.getState().resumeAction).toBe('prompt');
+
+    useResumeStore.getState().setResumeAction('resuming');
+    expect(useResumeStore.getState().resumeAction).toBe('resuming');
+
+    useResumeStore.getState().clearResumableTransfer();
+    expect(useResumeStore.getState().hasResumableTransfer).toBe(false);
+    expect(useResumeStore.getState().resumeAction).toBeNull();
   });
 });

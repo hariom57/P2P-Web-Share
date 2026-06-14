@@ -3,8 +3,11 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { connectSocket } from '../services/socket';
 import { useRoomStore } from '../stores/roomStore';
 import { useWebRTC } from '../hooks/useWebRTC';
-import { setActiveDataChannel, setEncryptionKey } from '../services/data-channel-registry';
+import { setActiveDataChannel, setEncryptionKey, setResumeAfterConnect, getResumeAfterConnect, getActiveFile } from '../services/data-channel-registry';
 import { importKey } from '../services/encryption';
+import { getCheckpoint, deleteCheckpoint, deleteRoomChunks } from '../services/checkpoint-store';
+import { useResumeStore } from '../stores/resumeStore';
+import ResumePrompt from '../components/ResumePrompt';
 
 function Room() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -21,7 +24,12 @@ function Room() {
 
   const onDataChannel = useCallback((channel: RTCDataChannel) => {
     setActiveDataChannel(channel);
-    navigate(`/transfer/${roomIdFull}`, { state: fileState || undefined });
+    navigate(`/transfer/${roomIdFull}`, {
+      state: {
+        ...fileState,
+        isResuming: getResumeAfterConnect(),
+      },
+    });
   }, [roomIdFull, navigate, fileState]);
 
   const { startConnection, error } = useWebRTC({
@@ -29,6 +37,32 @@ function Room() {
     isSender,
     onDataChannel,
   });
+
+  useEffect(() => {
+    if (!roomIdFull) return;
+    getCheckpoint(roomIdFull).then((cp) => {
+      if (cp && cp.lastReceivedChunk > 0) {
+        useResumeStore.getState().setResumableTransfer({
+          role: cp.role,
+          fileName: cp.fileName,
+          fileSize: cp.fileSize,
+          totalChunks: cp.totalChunks,
+          lastReceivedChunk: cp.lastReceivedChunk,
+          lastActivity: cp.timestamp,
+        });
+      }
+    });
+  }, [roomIdFull]);
+
+  const handleResume = useCallback(() => {
+    if (isSender && !getActiveFile()) {
+      setResumeAfterConnect(true);
+      return;
+    }
+    setResumeAfterConnect(true);
+  }, [isSender]);
+
+  const { resumeAction } = useResumeStore();
 
   useEffect(() => {
     if (!roomIdFull || hasJoinedRef.current) return;
@@ -143,6 +177,10 @@ function Room() {
         >
           Cancel
         </button>
+
+        {resumeAction === 'prompt' && roomIdFull && (
+          <ResumePrompt roomId={roomIdFull} onResume={handleResume} />
+        )}
       </div>
     </div>
   );

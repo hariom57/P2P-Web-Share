@@ -8,6 +8,8 @@ import {
   saveChunk,
   loadAllChunks,
   deleteRoomChunks,
+  cleanupStaleCheckpoints,
+  isCheckpointStale,
 } from '../services/checkpoint-store';
 
 const TEST_ROOM = 'test-room-id';
@@ -149,6 +151,52 @@ describe('checkpoint-store (IndexedDB)', () => {
       const otherMap = await loadAllChunks(otherRoom);
       expect(otherMap.size).toBe(1);
       expect(Array.from(otherMap.get(0)!)).toEqual([0xFF]);
+    });
+  });
+
+  describe('checkpoint management', () => {
+    it('should detect fresh checkpoint as not stale', async () => {
+      await saveCheckpoint(TEST_ROOM, {
+        role: 'sender', fileName: 'a.txt', fileSize: 100, totalChunks: 2,
+        lastSentChunk: 1, lastReceivedChunk: 0, lastAcknowledgedChunk: 1,
+        totalBytesSent: 50, timestamp: Date.now(),
+      });
+      const cp = await getCheckpoint(TEST_ROOM);
+      expect(cp).not.toBeNull();
+      expect(isCheckpointStale(cp!)).toBe(false);
+    });
+
+    it('should detect old checkpoint as stale', async () => {
+      await saveCheckpoint(TEST_ROOM, {
+        role: 'sender', fileName: 'a.txt', fileSize: 100, totalChunks: 2,
+        lastSentChunk: 1, lastReceivedChunk: 0, lastAcknowledgedChunk: 1,
+        totalBytesSent: 50, timestamp: Date.now() - 31 * 60 * 1000,
+      });
+      const cp = await getCheckpoint(TEST_ROOM);
+      expect(cp).not.toBeNull();
+      expect(isCheckpointStale(cp!)).toBe(true);
+    });
+
+    it('should clean up stale checkpoints', async () => {
+      await saveCheckpoint('stale-room', {
+        role: 'sender', fileName: 'old.txt', fileSize: 10, totalChunks: 1,
+        lastSentChunk: 0, lastReceivedChunk: 0, lastAcknowledgedChunk: 0,
+        totalBytesSent: 0, timestamp: Date.now() - 31 * 60 * 1000,
+      });
+      await saveCheckpoint('fresh-room', {
+        role: 'receiver', fileName: 'new.txt', fileSize: 20, totalChunks: 2,
+        lastSentChunk: 0, lastReceivedChunk: 1, lastAcknowledgedChunk: 0,
+        totalBytesSent: 0, timestamp: Date.now(),
+      });
+
+      const cleaned = await cleanupStaleCheckpoints();
+      expect(cleaned).toBeGreaterThanOrEqual(1);
+
+      const stale = await getCheckpoint('stale-room');
+      expect(stale).toBeNull();
+
+      const fresh = await getCheckpoint('fresh-room');
+      expect(fresh).not.toBeNull();
     });
   });
 });
