@@ -47,11 +47,16 @@ function ResumePrompt({ roomId, onResume }: ResumePromptProps) {
   const handleFileSelected = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.name !== fileName || file.size !== fileSize) {
+        alert(`File mismatch: expected "${fileName}" (${formatSize(fileSize)}), got "${file.name}" (${formatSize(file.size)}). Please select the correct file.`);
+        e.target.value = '';
+        return;
+      }
       setActiveFile(file);
       setResumeAction('resuming');
       onResume?.();
     }
-  }, [setResumeAction, onResume]);
+  }, [setResumeAction, onResume, fileName, fileSize]);
 
   const handleDiscard = useCallback(async () => {
     await deleteCheckpoint(roomId);

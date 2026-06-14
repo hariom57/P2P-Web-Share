@@ -13,7 +13,7 @@ export type RoleFilter = 'all' | 'sender' | 'receiver';
 export type StatusFilter = 'all' | 'completed' | 'error' | 'cancelled' | 'interrupted';
 
 export interface HistoryState {
-  entries: HistoryEntry[];
+  rawEntries: HistoryEntry[];
   isLoading: boolean;
   filterRole: RoleFilter;
   filterStatus: StatusFilter;
@@ -27,7 +27,7 @@ export interface HistoryState {
 }
 
 const initialState = {
-  entries: [] as HistoryEntry[],
+  rawEntries: [] as HistoryEntry[],
   isLoading: false,
   filterRole: 'all' as RoleFilter,
   filterStatus: 'all' as StatusFilter,
@@ -40,15 +40,8 @@ export const useHistoryStore = create<HistoryState>()(
 
       loadEntries: async () => {
         set({ isLoading: true });
-        const { filterRole, filterStatus } = get();
-        let entries = await getAllHistoryEntries();
-        if (filterRole !== 'all') {
-          entries = entries.filter((e) => e.role === filterRole);
-        }
-        if (filterStatus !== 'all') {
-          entries = entries.filter((e) => e.status === filterStatus);
-        }
-        set({ entries, isLoading: false });
+        const entries = await getAllHistoryEntries();
+        set({ rawEntries: entries, isLoading: false });
       },
 
       addEntry: async (entry) => {
@@ -61,13 +54,13 @@ export const useHistoryStore = create<HistoryState>()(
         await deleteRoomChunks(roomId);
         await deleteHistoryEntry(roomId);
         set((state) => ({
-          entries: state.entries.filter((e) => e.roomId !== roomId),
+          rawEntries: state.rawEntries.filter((e) => e.roomId !== roomId),
         }));
       },
 
       clearAll: async () => {
         await clearAllHistory();
-        set({ entries: [] });
+        set({ rawEntries: [] });
       },
 
       setFilterRole: (role) => set({ filterRole: role }),

@@ -27,7 +27,8 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
   const inFlightRef = useRef<Set<number>>(new Set());
   const windowSizeRef = useRef(PROTOCOL_CONSTANTS.MIN_WINDOW_SIZE);
   const cancelledRef = useRef(false);
-  const sendResolveRef = useRef<((value: boolean) => void) | null>(null);
+  const metaAckResolveRef = useRef<((value: boolean) => void) | null>(null);
+  const verifyResolveRef = useRef<((value: boolean) => void) | null>(null);
   const resumeResolveRef = useRef<((value: number) => void) | null>(null);
   const fileMetaRef = useRef<FileMetaMessage | null>(null);
   const chunkCountRef = useRef(0);
@@ -102,7 +103,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     dataChannel!.send(encodeMessage(metaMsg));
 
     const metaAck = await new Promise<boolean>((resolve) => {
-      sendResolveRef.current = resolve;
+      metaAckResolveRef.current = resolve;
       setTimeout(() => resolve(false), PROTOCOL_CONSTANTS.META_ACK_TIMEOUT_MS);
     });
 
@@ -222,7 +223,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     }));
 
     const verifyResult = await new Promise<boolean>((resolve) => {
-      sendResolveRef.current = (match: boolean) => resolve(match);
+      verifyResolveRef.current = (match: boolean) => resolve(match);
       setTimeout(() => resolve(false), PROTOCOL_CONSTANTS.VERIFY_TIMEOUT_MS);
     });
 
@@ -360,6 +361,25 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     dataChannel.binaryType = 'arraybuffer';
     const receivedChunks = new Map<number, Uint8Array>();
 
+    const handleClose = () => {
+      cancelledRef.current = true;
+      setError('Connection closed');
+      transferStore.setTransferPhase('error');
+      transferStore.setTransferError('Connection closed');
+      setIsTransferring(false);
+    };
+
+    const handleError = () => {
+      cancelledRef.current = true;
+      setError('Connection error');
+      transferStore.setTransferPhase('error');
+      transferStore.setTransferError('Connection error');
+      setIsTransferring(false);
+    };
+
+    dataChannel.addEventListener('close', handleClose);
+    dataChannel.addEventListener('error', handleError);
+
     const handleMessage = async (event: MessageEvent) => {
       if (!(event.data instanceof ArrayBuffer)) return;
 
@@ -494,9 +514,9 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
           inFlightRef.current.delete(msg.sequence);
           transferStore.incrementChunksAcknowledged();
           transferStore.setProgress({ lastAcknowledgedChunk: msg.sequence });
-          if (sendResolveRef.current && msg.sequence === 0) {
-            sendResolveRef.current(true);
-            sendResolveRef.current = null;
+          if (msg.sequence === 0 && metaAckResolveRef.current) {
+            metaAckResolveRef.current(true);
+            metaAckResolveRef.current = null;
           }
           break;
         }
@@ -575,9 +595,9 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         }
 
         case MessageType.VERIFY_RESPONSE: {
-          if (sendResolveRef.current) {
-            sendResolveRef.current(msg.match);
-            sendResolveRef.current = null;
+          if (verifyResolveRef.current) {
+            verifyResolveRef.current(msg.match);
+            verifyResolveRef.current = null;
           }
           break;
         }
@@ -639,6 +659,8 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     dataChannel.addEventListener('message', handleMessage);
     return () => {
       dataChannel.removeEventListener('message', handleMessage);
+      dataChannel.removeEventListener('close', handleClose);
+      dataChannel.removeEventListener('error', handleError);
     };
   }, [dataChannel, transferStore, addNotification]);
 

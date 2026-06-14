@@ -50,3 +50,4 @@ export {
   MAX_FILE_SIZE_MVP,
   MAX_PEERS_PER_ROOM,
 } from './constants';
+export { formatFileSize } from './constants';

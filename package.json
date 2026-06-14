@@ -14,9 +14,13 @@
     "clean": "rm -rf packages/*/dist node_modules"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.6",
     "concurrently": "^8.2.2",
     "eslint": "^9.0.0",
     "prettier": "^3.2.5",
     "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.4"
   }
 }

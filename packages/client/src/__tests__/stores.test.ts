@@ -259,7 +259,7 @@ describe('historyStore', () => {
   });
 
   it('should start with empty entries', () => {
-    expect(useHistoryStore.getState().entries).toEqual([]);
+    expect(useHistoryStore.getState().rawEntries).toEqual([]);
   });
 
   it('should add and list entries', async () => {
@@ -278,7 +278,7 @@ describe('historyStore', () => {
       completedAt: Date.now(),
     });
 
-    const entries = useHistoryStore.getState().entries;
+    const entries = useHistoryStore.getState().rawEntries;
     expect(entries.length).toBeGreaterThanOrEqual(1);
     const entry = entries.find((e) => e.roomId === 'room1');
     expect(entry).toBeDefined();
@@ -300,7 +300,10 @@ describe('historyStore', () => {
 
     useHistoryStore.getState().setFilterRole('sender');
     await useHistoryStore.getState().loadEntries();
-    const entries = useHistoryStore.getState().entries;
-    expect(entries.every((e) => e.role === 'sender')).toBe(true);
+    const raw = useHistoryStore.getState().rawEntries;
+    const filtered = raw.filter((e) => e.role === 'sender');
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].role).toBe('sender');
+    expect(raw.length).toBe(2);
   });
 });

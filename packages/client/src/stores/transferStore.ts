@@ -165,7 +165,16 @@ export const useTransferStore = create<TransferState>()(
             ? 0.7 * state.averageSpeedBps + 0.3 * currentSpeed
             : currentSpeed;
           const newBytesTransferred = state.bytesTransferred + bytes;
-          const remainingBytes = state.fileSize ? state.fileSize - newBytesTransferred : 0;
+
+          if (state.fileSize === null) {
+            return {
+              bytesTransferred: newBytesTransferred,
+              currentSpeedBps: currentSpeed,
+              averageSpeedBps: averageSpeed,
+            };
+          }
+
+          const remainingBytes = state.fileSize - newBytesTransferred;
           const eta = averageSpeed > 0 ? (remainingBytes / averageSpeed) * 1000 : 0;
 
           return {

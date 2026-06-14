@@ -4,7 +4,8 @@ import type { Server as HttpServer } from 'http';
 import type { AddressInfo } from 'net';
 import express from 'express';
 import { Server } from 'socket.io';
-import { io as Client, Socket as ClientSocket } from 'socket.io-client';
+import Client from 'socket.io-client';
+type ClientSocket = ReturnType<typeof Client>;
 import { RoomManager } from '../services/room-manager';
 
 function createServerPair(): Promise<{ server: HttpServer; io: Server; port: number }> {
@@ -22,12 +23,11 @@ function createServerPair(): Promise<{ server: HttpServer; io: Server; port: num
     });
 
     io.on('connection', (socket) => {
-      socket.on('create-room', (_data, ack) => {
+      socket.on('create-room', () => {
         const room = roomManager.createRoom();
         roomManager.joinRoom(room.id, socket.id);
         socket.join(room.id);
         socket.emit('room-created', { roomId: room.id, expiresAt: room.expiresAt });
-        if (typeof ack === 'function') ack({ ok: true });
       });
 
       socket.on('join-room', (data: { roomId: string }) => {
@@ -36,8 +36,9 @@ function createServerPair(): Promise<{ server: HttpServer; io: Server; port: num
           socket.join(room.id);
           socket.emit('room-joined', { roomId: room.id, peerCount });
           socket.to(room.id).emit('peer-joined', { peerId: socket.id });
-        } catch (err: any) {
-          socket.emit('room-error', { code: err.code, message: err.message });
+        } catch (err: unknown) {
+          const e = err as { code: string; message: string };
+          socket.emit('room-error', { code: e.code, message: e.message });
         }
       });
 
@@ -49,21 +50,21 @@ function createServerPair(): Promise<{ server: HttpServer; io: Server; port: num
         }
       });
 
-      socket.on('offer', (data: { roomId: string; offer: any }) => {
+      socket.on('offer', (data: { roomId: string; offer: unknown }) => {
         const otherPeerId = roomManager.getOtherPeerSocketId(data.roomId, socket.id);
         if (otherPeerId) {
           socket.to(otherPeerId).emit('offer', { offer: data.offer });
         }
       });
 
-      socket.on('answer', (data: { roomId: string; answer: any }) => {
+      socket.on('answer', (data: { roomId: string; answer: unknown }) => {
         const otherPeerId = roomManager.getOtherPeerSocketId(data.roomId, socket.id);
         if (otherPeerId) {
           socket.to(otherPeerId).emit('answer', { answer: data.answer });
         }
       });
 
-      socket.on('ice-candidate', (data: { roomId: string; candidate: any }) => {
+      socket.on('ice-candidate', (data: { roomId: string; candidate: unknown }) => {
         const otherPeerId = roomManager.getOtherPeerSocketId(data.roomId, socket.id);
         if (otherPeerId) {
           socket.to(otherPeerId).emit('ice-candidate', { candidate: data.candidate });
@@ -140,15 +141,32 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
     });
   }
 
+  async function createAndJoinRoom(sender: ClientSocket, receiver: ClientSocket): Promise<{ roomId: string }> {
+    const roomPromise = new Promise<{ roomId: string }>((resolve) => {
+      sender.once('room-created', (data: unknown) => resolve(data as { roomId: string }));
+    });
+    sender.emit('create-room');
+    const room = await roomPromise;
+
+    const joinedPromise = new Promise<void>((resolve) => {
+      receiver.once('room-joined', () => resolve());
+    });
+    receiver.emit('join-room', { roomId: room.roomId });
+    await joinedPromise;
+
+    return room;
+  }
+
   describe('Room Lifecycle', () => {
     it('should create a room and return roomId', async () => {
       const sender = await connectSocket();
-      const response = await new Promise<{ roomId: string; expiresAt: number }>((resolve) => {
-        sender.emit('create-room');
-        sender.on('room-created', (data) => resolve(data));
+      const response = new Promise<{ roomId: string; expiresAt: number }>((resolve) => {
+        sender.once('room-created', (data: unknown) => resolve(data as { roomId: string; expiresAt: number }));
       });
-      expect(response.roomId).toMatch(/^[a-z0-9]{6}$/);
-      expect(response.expiresAt).toBeGreaterThan(Date.now());
+      sender.emit('create-room');
+      const result = await response;
+      expect(result.roomId).toMatch(/^[a-z0-9]{6}$/);
+      expect(result.expiresAt).toBeGreaterThan(Date.now());
       sender.close();
     });
 
@@ -156,24 +174,24 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
       const sender = await connectSocket();
       const receiver = await connectSocket();
 
-      const room = await new Promise<{ roomId: string }>((resolve) => {
-        sender.emit('create-room');
-        sender.on('room-created', (data) => resolve(data));
+      const roomPromise = new Promise<{ roomId: string }>((resolve) => {
+        sender.once('room-created', (data: unknown) => resolve(data as { roomId: string }));
       });
+      sender.emit('create-room');
+      const created = await roomPromise;
 
-      const [joinResult, peerJoined] = await Promise.all([
-        new Promise<{ roomId: string; peerCount: number }>((resolve) => {
-          receiver.emit('join-room', { roomId: room.roomId });
-          receiver.on('room-joined', (data) => resolve(data));
-        }),
-        new Promise<{ peerId: string }>((resolve) => {
-          sender.on('peer-joined', (data) => resolve(data));
-        }),
-      ]);
+      const joinResult = new Promise<{ roomId: string; peerCount: number }>((resolve) => {
+        receiver.once('room-joined', (data: unknown) => resolve(data as { roomId: string; peerCount: number }));
+      });
+      const peerJoined = new Promise<{ peerId: string }>((resolve) => {
+        sender.once('peer-joined', (data: unknown) => resolve(data as { peerId: string }));
+      });
+      receiver.emit('join-room', { roomId: created.roomId });
+      const [joinData, peerData] = await Promise.all([joinResult, peerJoined]);
 
-      expect(joinResult.roomId).toBe(room.roomId);
-      expect(joinResult.peerCount).toBe(2);
-      expect(peerJoined.peerId).toBeTruthy();
+      expect(joinData.roomId).toBe(created.roomId);
+      expect(joinData.peerCount).toBe(2);
+      expect(peerData.peerId).toBeTruthy();
 
       sender.close();
       receiver.close();
@@ -182,7 +200,7 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
     it('should reject joining a non-existent room', async () => {
       const socket = await connectSocket();
       const errorPromise = new Promise<{ code: string }>((resolve) => {
-        socket.on('room-error', (data) => resolve(data));
+        socket.once('room-error', (data: unknown) => resolve(data as { code: string }));
       });
       socket.emit('join-room', { roomId: 'xxxxxx' });
       const error = await errorPromise;
@@ -194,20 +212,21 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
       const sender = await connectSocket();
       const receiver = await connectSocket();
 
-      const room = await new Promise<{ roomId: string }>((resolve) => {
-        sender.emit('create-room');
-        sender.on('room-created', (data) => resolve(data));
+      const roomPromise = new Promise<{ roomId: string }>((resolve) => {
+        sender.once('room-created', (data: unknown) => resolve(data as { roomId: string }));
       });
+      sender.emit('create-room');
+      const created = await roomPromise;
 
-      await new Promise<void>((resolve) => {
-        receiver.emit('join-room', { roomId: room.roomId });
-        receiver.on('room-joined', () => resolve());
+      const joined = new Promise<void>((resolve) => {
+        receiver.once('room-joined', () => resolve());
       });
+      receiver.emit('join-room', { roomId: created.roomId });
+      await joined;
 
       const disconnectPromise = new Promise<{ peerId: string }>((resolve) => {
-        sender.on('peer-disconnected', (data) => resolve(data));
+        sender.once('peer-disconnected', (data: unknown) => resolve(data as { peerId: string }));
       });
-
       receiver.close();
       const result = await disconnectPromise;
       expect(result.peerId).toBeTruthy();
@@ -222,10 +241,9 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
 
       const room = await createAndJoinRoom(sender, receiver);
 
-      const offerPromise = new Promise<any>((resolve) => {
-        receiver.on('offer', (data) => resolve(data));
+      const offerPromise = new Promise<{ offer: unknown }>((resolve) => {
+        receiver.once('offer', (data: unknown) => resolve(data as { offer: unknown }));
       });
-
       const testOffer = { type: 'offer', sdp: 'v=0\r\no=- 0 1 IN IP4 0.0.0.0\r\n' };
       sender.emit('offer', { roomId: room.roomId, offer: testOffer });
 
@@ -242,10 +260,9 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
 
       const room = await createAndJoinRoom(sender, receiver);
 
-      const answerPromise = new Promise<any>((resolve) => {
-        sender.on('answer', (data) => resolve(data));
+      const answerPromise = new Promise<{ answer: unknown }>((resolve) => {
+        sender.once('answer', (data: unknown) => resolve(data as { answer: unknown }));
       });
-
       const testAnswer = { type: 'answer', sdp: 'v=0\r\no=- 0 1 IN IP4 0.0.0.0\r\n' };
       receiver.emit('answer', { roomId: room.roomId, answer: testAnswer });
 
@@ -262,10 +279,9 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
 
       const room = await createAndJoinRoom(sender, receiver);
 
-      const icePromise = new Promise<any>((resolve) => {
-        receiver.on('ice-candidate', (data) => resolve(data));
+      const icePromise = new Promise<{ candidate: unknown }>((resolve) => {
+        receiver.once('ice-candidate', (data: unknown) => resolve(data as { candidate: unknown }));
       });
-
       const testCandidate = { candidate: 'candidate:1 1 UDP 2122252543 192.168.1.1 54321 typ host', sdpMid: '0', sdpMLineIndex: 0 };
       sender.emit('ice-candidate', { roomId: room.roomId, candidate: testCandidate });
 
@@ -284,10 +300,9 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
 
       const room = await createAndJoinRoom(sender, receiver);
 
-      const metaPromise = new Promise<any>((resolve) => {
-        receiver.on('file-metadata', (data) => resolve(data));
+      const metaPromise = new Promise<{ fileName: string; fileSize: number; fileType: string }>((resolve) => {
+        receiver.once('file-metadata', (data: unknown) => resolve(data as { fileName: string; fileSize: number; fileType: string }));
       });
-
       sender.emit('file-metadata', {
         roomId: room.roomId,
         fileName: 'test.pdf',
@@ -310,11 +325,11 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
 
       const room = await createAndJoinRoom(sender, receiver);
 
-      const completePromise = new Promise<any>((resolve) => {
-        receiver.on('transfer-complete', (data) => resolve(data));
+      const completePromise = new Promise<{ sha256Hash: string }>((resolve) => {
+        receiver.once('transfer-complete', (data: unknown) => resolve(data as { sha256Hash: string }));
       });
-
       sender.emit('transfer-complete', { roomId: room.roomId, sha256Hash: 'abc123' });
+
       const received = await completePromise;
       expect(received.sha256Hash).toBe('abc123');
 
@@ -328,11 +343,11 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
 
       const room = await createAndJoinRoom(sender, receiver);
 
-      const errorPromise = new Promise<any>((resolve) => {
-        receiver.on('transfer-error', (data) => resolve(data));
+      const errorPromise = new Promise<{ error: string }>((resolve) => {
+        receiver.once('transfer-error', (data: unknown) => resolve(data as { error: string }));
       });
-
       sender.emit('transfer-error', { roomId: room.roomId, error: 'Connection lost' });
+
       const received = await errorPromise;
       expect(received.error).toBe('Connection lost');
 
@@ -341,17 +356,3 @@ describe('Signaling Server Integration', { timeout: 10_000 }, () => {
     });
   });
 });
-
-async function createAndJoinRoom(sender: ClientSocket, receiver: ClientSocket): Promise<{ roomId: string }> {
-  const room = await new Promise<{ roomId: string }>((resolve) => {
-    sender.emit('create-room');
-    sender.on('room-created', (data) => resolve(data));
-  });
-
-  await new Promise<void>((resolve) => {
-    receiver.emit('join-room', { roomId: room.roomId });
-    receiver.on('room-joined', () => resolve());
-  });
-
-  return room;
-}

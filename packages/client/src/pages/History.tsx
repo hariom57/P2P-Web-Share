@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useHistoryStore, type RoleFilter, type StatusFilter } from '../stores/historyStore';
 
 function History() {
   const navigate = useNavigate();
   const {
-    entries, isLoading,
+    rawEntries, isLoading,
     filterRole, filterStatus,
     loadEntries, removeEntry, clearAll,
     setFilterRole, setFilterStatus,
@@ -16,11 +16,11 @@ function History() {
     loadEntries();
   }, [loadEntries]);
 
-  const filtered = entries.filter((e) => {
+  const filtered = useMemo(() => rawEntries.filter((e) => {
     if (filterRole !== 'all' && e.role !== filterRole) return false;
     if (filterStatus !== 'all' && e.status !== filterStatus) return false;
     return true;
-  });
+  }), [rawEntries, filterRole, filterStatus]);
 
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -60,7 +60,7 @@ function History() {
             </button>
             <h1 className="text-2xl font-bold">Transfer History</h1>
           </div>
-          {entries.length > 0 && (
+          {rawEntries.length > 0 && (
             <button
               className="text-sm text-red-400 hover:text-red-300 transition-colors"
               onClick={() => setConfirmClear(true)}

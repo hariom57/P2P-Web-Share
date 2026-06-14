@@ -113,10 +113,14 @@ function PreviewText({ url }: { url: string }) {
   const [text, setText] = useState<string>('');
 
   useEffect(() => {
-    fetch(url)
+    const abort = new AbortController();
+    fetch(url, { signal: abort.signal })
       .then((r) => r.text())
       .then((t) => setText(t.slice(0, 5000)))
-      .catch(() => setText('(unable to preview)'));
+      .catch(() => {
+        if (!abort.signal.aborted) setText('(unable to preview)');
+      });
+    return () => abort.abort();
   }, [url]);
 
   return (

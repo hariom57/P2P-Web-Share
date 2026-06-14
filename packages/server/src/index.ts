@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { RoomManager, RoomError } from './services/room-manager.js';
@@ -25,11 +25,11 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: Date.now(), activeRooms: roomManager.getActiveRoomCount() });
 });
 
-function emitRoomError(socket: ReturnType<typeof io['emit']>, code: string, message: string): void {
+function emitRoomError(socket: Socket, code: string, message: string): void {
   socket.emit('room-error', { code, message });
 }
 
-function validateRoom(socket: ReturnType<typeof io['emit']>, roomId: string): string | null {
+function validateRoom(socket: Socket, roomId: string): string | null {
   const room = roomManager.getRoom(roomId);
   if (!room) {
     emitRoomError(socket, 'INVALID_ROOM', `Room ${roomId} does not exist`);
@@ -43,7 +43,7 @@ function validateRoom(socket: ReturnType<typeof io['emit']>, roomId: string): st
 }
 
 function forwardToPeer(
-  socket: ReturnType<typeof io['emit']>,
+  socket: Socket,
   event: string,
   roomId: string,
   payload: Record<string, unknown>,

@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { connectSocket } from '../services/socket';
 import { useRoomStore } from '../stores/roomStore';
 import { useWebRTC } from '../hooks/useWebRTC';
-import { setActiveDataChannel, setEncryptionKey, setResumeAfterConnect, getResumeAfterConnect, getActiveFile } from '../services/data-channel-registry';
+import { setActiveDataChannel, getActiveDataChannel, setEncryptionKey, setResumeAfterConnect, getResumeAfterConnect, getActiveFile } from '../services/data-channel-registry';
 import { importKey } from '../services/encryption';
 import { getCheckpoint, deleteCheckpoint, deleteRoomChunks } from '../services/checkpoint-store';
 import { useResumeStore } from '../stores/resumeStore';
@@ -13,9 +13,13 @@ import QRCode from '../components/QRCode';
 function keyFingerprint(hash: string): string | null {
   const match = hash.match(/key=([A-Za-z0-9+/=]+)/);
   if (!match) return null;
-  const raw = atob(match[1]);
-  const hex = Array.from(raw).map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
-  return `${hex.slice(0, 4).toUpperCase()} ${hex.slice(4, 8).toUpperCase()} ${hex.slice(8, 12).toUpperCase()} ${hex.slice(12, 16).toUpperCase()}`;
+  try {
+    const raw = atob(match[1]);
+    const hex = Array.from(raw).map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 4).toUpperCase()} ${hex.slice(4, 8).toUpperCase()} ${hex.slice(8, 12).toUpperCase()} ${hex.slice(12, 16).toUpperCase()}`;
+  } catch {
+    return null;
+  }
 }
 
 function Room() {
@@ -130,6 +134,10 @@ function Room() {
 
   useEffect(() => {
     return () => {
+      const dc = getActiveDataChannel();
+      if (dc && dc.readyState !== 'closed' && dc.readyState !== 'closing') {
+        dc.close();
+      }
       setActiveDataChannel(null);
     };
   }, []);

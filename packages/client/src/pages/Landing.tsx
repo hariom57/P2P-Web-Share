@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatFileSize } from '@p2p-share/shared';
 import { connectSocket } from '../services/socket';
 import { useRoomStore } from '../stores/roomStore';
 import { setActiveFile, setActiveFiles, setEncryptionKey } from '../services/data-channel-registry';
@@ -13,14 +14,6 @@ function Landing() {
   const [createError, setCreateError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { setRoomPhase } = useRoomStore();
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    const v = bytes / Math.pow(1024, i);
-    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
-  };
 
   const handleFiles = useCallback((files: FileList) => {
     setCreateError(null);
@@ -75,7 +68,7 @@ function Landing() {
               allEntries.map((e) => {
                 if (e.isFile) {
                   return new Promise<File[]>((res) => {
-                    (e as FileSystemFileEntry).file((f) => res([f]));
+                    (e as FileSystemFileEntry).file((f) => res([f]), () => res([]));
                   });
                 }
                 return traverseDirectory(e as FileSystemDirectoryEntry);
@@ -85,7 +78,7 @@ function Landing() {
             allEntries.push(...entries);
             readBatch();
           }
-        });
+        }, () => resolve([]));
       }
       readBatch();
     });
@@ -109,35 +102,49 @@ function Landing() {
     setCreateError(null);
     setRoomPhase('creating');
 
-    const key = await generateEncryptionKey();
-    setEncryptionKey(key);
-    const keyBase64 = await exportKey(key);
+    try {
+      const key = await generateEncryptionKey();
+      setEncryptionKey(key);
+      const keyBase64 = await exportKey(key);
 
-    const socket = connectSocket();
-    if (!socket.connected) socket.connect();
+      const socket = connectSocket();
+      if (!socket.connected) socket.connect();
 
-    socket.once('room-created', (data: { roomId: string }) => {
-      setActiveFiles(selectedFiles);
-      setActiveFile(null);
-      setRoomPhase('waiting');
-      navigate(`/room/${data.roomId}#key=${keyBase64}`, {
-        state: {
-          files: selectedFiles.map((f) => ({
-            fileName: f.name,
-            fileSize: f.size,
-            fileType: f.type,
-          })),
-        },
+      socket.once('room-created', (data: { roomId: string }) => {
+        setActiveFiles(selectedFiles);
+        setActiveFile(null);
+        setRoomPhase('waiting');
+        navigate(`/room/${data.roomId}#key=${keyBase64}`, {
+          state: {
+            files: selectedFiles.map((f) => ({
+              fileName: f.name,
+              fileSize: f.size,
+              fileType: f.type,
+            })),
+          },
+        });
       });
-    });
 
-    socket.once('room-error', (data: { message: string }) => {
-      setCreateError(data.message);
+      socket.once('room-error', (data: { message: string }) => {
+        setCreateError(data.message);
+        setRoomPhase('idle');
+        setIsCreating(false);
+      });
+
+      socket.emit('create-room');
+
+      setTimeout(() => {
+        if (isCreating) {
+          setCreateError('Room creation timed out. Please try again.');
+          setRoomPhase('idle');
+          setIsCreating(false);
+        }
+      }, 15000);
+    } catch (err) {
+      setCreateError('Failed to create room. Please check your connection.');
       setRoomPhase('idle');
       setIsCreating(false);
-    });
-
-    socket.emit('create-room');
+    }
   }, [isCreating, selectedFiles, navigate]);
 
   return (

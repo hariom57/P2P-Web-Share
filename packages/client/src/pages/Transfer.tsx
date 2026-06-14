@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { formatFileSize } from '@p2p-share/shared';
 import { useFileTransfer } from '../hooks/useFileTransfer';
 import { useTransferStore } from '../stores/transferStore';
 import { useResumeStore } from '../stores/resumeStore';
@@ -10,7 +11,7 @@ function Transfer() {
   const navigate = useNavigate();
   const location = useLocation();
   const fileState = location.state as { fileName?: string; fileSize?: number; fileType?: string; files?: { fileName: string; fileSize: number; fileType: string }[]; isResuming?: boolean } | null;
-  const isSender = !!fileState?.fileName;
+  const isSender = !!(fileState?.fileName || fileState?.files?.length);
   const isResuming = fileState?.isResuming || getResumeAfterConnect();
   const [waitingForFile, setWaitingForFile] = useState(isSender && isResuming && !getActiveFile());
   const hasStartedRef = useRef(false);
@@ -112,14 +113,6 @@ function Transfer() {
     if (bps === 0) return '-- MB/s';
     const mbps = bps / 1024 / 1024;
     return mbps >= 1 ? `${mbps.toFixed(2)} MB/s` : `${(bps / 1024).toFixed(1)} KB/s`;
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const units = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
-    const v = bytes / Math.pow(1024, i);
-    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
   };
 
   const formatEta = (ms: number) => {
