@@ -4,6 +4,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import { useTransferStore } from '../stores/transferStore';
 import { useUIStore } from '../stores/uiStore';
 import { useResumeStore } from '../stores/resumeStore';
+import { useHistoryStore } from '../stores/historyStore';
 
 describe('roomStore', () => {
   beforeEach(() => {
@@ -206,5 +207,59 @@ describe('resumeStore', () => {
     useResumeStore.getState().clearResumableTransfer();
     expect(useResumeStore.getState().hasResumableTransfer).toBe(false);
     expect(useResumeStore.getState().resumeAction).toBeNull();
+  });
+});
+
+describe('historyStore', () => {
+  beforeEach(async () => {
+    await useHistoryStore.getState().clearAll();
+    useHistoryStore.getState().setFilterRole('all');
+    useHistoryStore.getState().setFilterStatus('all');
+  });
+
+  it('should start with empty entries', () => {
+    expect(useHistoryStore.getState().entries).toEqual([]);
+  });
+
+  it('should add and list entries', async () => {
+    await useHistoryStore.getState().addEntry({
+      roomId: 'room1',
+      role: 'sender',
+      fileName: 'test.txt',
+      fileSize: 1000,
+      fileType: 'text/plain',
+      totalChunks: 10,
+      chunksTransferred: 10,
+      status: 'completed',
+      sha256Hash: 'abc123',
+      speedAvgBps: 1000000,
+      startedAt: Date.now() - 10000,
+      completedAt: Date.now(),
+    });
+
+    const entries = useHistoryStore.getState().entries;
+    expect(entries.length).toBeGreaterThanOrEqual(1);
+    const entry = entries.find((e) => e.roomId === 'room1');
+    expect(entry).toBeDefined();
+    expect(entry!.fileName).toBe('test.txt');
+    expect(entry!.status).toBe('completed');
+  });
+
+  it('should filter by role', async () => {
+    await useHistoryStore.getState().addEntry({
+      roomId: 'r1', role: 'sender', fileName: 'a.txt', fileSize: 100, fileType: 'text/plain',
+      totalChunks: 2, chunksTransferred: 2, status: 'completed', sha256Hash: null,
+      speedAvgBps: 0, startedAt: Date.now(), completedAt: Date.now(),
+    });
+    await useHistoryStore.getState().addEntry({
+      roomId: 'r2', role: 'receiver', fileName: 'b.txt', fileSize: 200, fileType: 'text/plain',
+      totalChunks: 4, chunksTransferred: 4, status: 'completed', sha256Hash: null,
+      speedAvgBps: 0, startedAt: Date.now(), completedAt: Date.now(),
+    });
+
+    useHistoryStore.getState().setFilterRole('sender');
+    await useHistoryStore.getState().loadEntries();
+    const entries = useHistoryStore.getState().entries;
+    expect(entries.every((e) => e.role === 'sender')).toBe(true);
   });
 });

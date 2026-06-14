@@ -122,6 +122,15 @@ function Landing() {
           <p className="text-red-400 text-sm mb-4">{createError}</p>
         )}
 
+        <div className="mb-4">
+          <button
+            className="text-sm text-gray-500 hover:text-gray-300 underline transition-colors"
+            onClick={() => navigate('/history')}
+          >
+            Transfer History
+          </button>
+        </div>
+
         <button
           className={`w-full py-3 px-6 rounded-lg font-semibold text-lg transition-all ${
             selectedFile && !isCreating
