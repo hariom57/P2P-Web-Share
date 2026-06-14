@@ -18,6 +18,7 @@ export interface TransferState {
   receiverHash: string | null;
   totalChunks: number;
   chunkSizeBytes: number;
+  previewUrl: string | null;
 
   batchFiles: BatchFileEntry[];
   currentFileIndex: number;
@@ -42,6 +43,7 @@ export interface TransferState {
   setTransferError: (error: string | null) => void;
   setSha256Hash: (hash: string) => void;
   setReceiverHash: (hash: string) => void;
+  setPreviewUrl: (url: string | null) => void;
   setBatchFiles: (files: BatchFileEntry[]) => void;
   setCurrentFileIndex: (index: number) => void;
   markBatchFileTransferred: (index: number) => void;
@@ -61,6 +63,7 @@ const initialState = {
   receiverHash: null as string | null,
   totalChunks: 0,
   chunkSizeBytes: 16384,
+  previewUrl: null as string | null,
   batchFiles: [] as BatchFileEntry[],
   currentFileIndex: 0,
 
@@ -96,6 +99,12 @@ export const useTransferStore = create<TransferState>()(
 
       setReceiverHash: (hash) => set({ receiverHash: hash }),
 
+      setPreviewUrl: (url) => {
+        const prev = get().previewUrl;
+        if (prev) URL.revokeObjectURL(prev);
+        set({ previewUrl: url });
+      },
+
       setBatchFiles: (files) => set({ batchFiles: files, currentFileIndex: 0 }),
 
       setCurrentFileIndex: (index) => set({ currentFileIndex: index }),
@@ -109,13 +118,16 @@ export const useTransferStore = create<TransferState>()(
           return { batchFiles: updated };
         }),
 
-      resetFileProgress: () =>
+      resetFileProgress: () => {
+        const prev = get().previewUrl;
+        if (prev) URL.revokeObjectURL(prev);
         set({
           fileName: null,
           fileSize: null,
           fileType: null,
           sha256Hash: null,
           receiverHash: null,
+          previewUrl: null,
           totalChunks: 0,
           chunkSizeBytes: 16384,
           chunksSent: 0,
@@ -127,7 +139,8 @@ export const useTransferStore = create<TransferState>()(
           etaMs: 0,
           progressPercent: 0,
           lastAcknowledgedChunk: -1,
-        }),
+        });
+      },
 
       incrementChunksSent: () => set((state) => ({ chunksSent: state.chunksSent + 1 })),
 
@@ -163,7 +176,11 @@ export const useTransferStore = create<TransferState>()(
           };
         }),
 
-      reset: () => set(initialState),
+      reset: () => {
+        const prev = get().previewUrl;
+        if (prev) URL.revokeObjectURL(prev);
+        set(initialState);
+      },
     }),
     { name: 'p2p-transfer' },
   ),

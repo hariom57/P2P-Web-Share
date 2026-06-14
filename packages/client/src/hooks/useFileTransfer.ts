@@ -535,6 +535,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
                 }
                 const blob = reassembleFile(decryptedChunks, meta.totalChunks, meta.mimeType);
                 triggerDownload(blob, meta.fileName);
+                transferStore.setPreviewUrl(URL.createObjectURL(blob));
                 addNotification({ type: 'success', title: `Downloaded: ${meta.fileName}`, durationMs: 5000 });
                 if (roomIdRef.current) {
                   saveHistoryEntry({

@@ -48,6 +48,7 @@ function Transfer() {
   const bytesTransferred = useTransferStore((s) => s.bytesTransferred);
   const batchFiles = useTransferStore((s) => s.batchFiles);
   const currentFileIndex = useTransferStore((s) => s.currentFileIndex);
+  const previewUrl = useTransferStore((s) => s.previewUrl);
 
   const totalFiles = fileState?.files?.length || (fileState?.fileName ? 1 : 0);
 
@@ -59,7 +60,7 @@ function Transfer() {
           : (fileName ? [fileName] : []);
         const completedError = transferPhase === 'error' ? useTransferStore.getState().transferError : null;
         navigate(`/complete/${roomId}`, {
-          state: { phase: transferPhase, fileName, files: completedNames, error: completedError },
+          state: { phase: transferPhase, fileName, files: completedNames, error: completedError, previewUrl, fileType: useTransferStore.getState().fileType },
         });
       }, 1500);
       return () => clearTimeout(timer);
