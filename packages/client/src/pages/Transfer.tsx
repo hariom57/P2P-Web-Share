@@ -3,13 +3,13 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useFileTransfer } from '../hooks/useFileTransfer';
 import { useTransferStore } from '../stores/transferStore';
 import { useResumeStore } from '../stores/resumeStore';
-import { getActiveDataChannel, getActiveFile, setActiveFile, getResumeAfterConnect, setResumeAfterConnect } from '../services/data-channel-registry';
+import { getActiveDataChannel, getActiveFiles, getActiveFile, setActiveFile, getResumeAfterConnect, setResumeAfterConnect } from '../services/data-channel-registry';
 
 function Transfer() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const fileState = location.state as { fileName?: string; fileSize?: number; fileType?: string; isResuming?: boolean } | null;
+  const fileState = location.state as { fileName?: string; fileSize?: number; fileType?: string; files?: { fileName: string; fileSize: number; fileType: string }[]; isResuming?: boolean } | null;
   const isSender = !!fileState?.fileName;
   const isResuming = fileState?.isResuming || getResumeAfterConnect();
   const [waitingForFile, setWaitingForFile] = useState(isSender && isResuming && !getActiveFile());
@@ -32,7 +32,7 @@ function Transfer() {
     }
   }, [resumeAction, clearResumableTransfer]);
 
-  const { sendFile, cancel, isTransferring, error } = useFileTransfer({ dataChannel, roomId });
+  const { sendFiles, cancel, isTransferring, error } = useFileTransfer({ dataChannel, roomId });
 
   const transferPhase = useTransferStore((s) => s.transferPhase);
   const progress = useTransferStore((s) => s.progressPercent);
@@ -46,30 +46,45 @@ function Transfer() {
   const fileName = useTransferStore((s) => s.fileName);
   const fileSize = useTransferStore((s) => s.fileSize);
   const bytesTransferred = useTransferStore((s) => s.bytesTransferred);
+  const batchFiles = useTransferStore((s) => s.batchFiles);
+  const currentFileIndex = useTransferStore((s) => s.currentFileIndex);
+
+  const totalFiles = fileState?.files?.length || (fileState?.fileName ? 1 : 0);
 
   useEffect(() => {
     if (transferPhase === 'complete' || transferPhase === 'error' || transferPhase === 'cancelled') {
       const timer = setTimeout(() => {
+        const completedNames = batchFiles.length > 0
+          ? batchFiles.map((f) => f.name)
+          : (fileName ? [fileName] : []);
+        const completedError = transferPhase === 'error' ? useTransferStore.getState().transferError : null;
         navigate(`/complete/${roomId}`, {
-          state: { phase: transferPhase, fileName, error: transferPhase === 'error' ? useTransferStore.getState().transferError : null },
+          state: { phase: transferPhase, fileName, files: completedNames, error: completedError },
         });
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [transferPhase, roomId, navigate, fileName]);
+  }, [transferPhase, roomId, navigate, fileName, batchFiles]);
 
   useEffect(() => {
     if (isSender && dataChannel && dataChannel.readyState === 'open' && !hasStartedRef.current) {
-      const file = getActiveFile();
-      if (file) {
+      const files = getActiveFiles();
+      if (files && files.length > 0) {
         hasStartedRef.current = true;
         setWaitingForFile(false);
-        sendFile(file);
-      } else if (isResuming) {
-        setWaitingForFile(true);
+        sendFiles(files);
+      } else {
+        const file = getActiveFile();
+        if (file) {
+          hasStartedRef.current = true;
+          setWaitingForFile(false);
+          sendFiles([file]);
+        } else if (isResuming) {
+          setWaitingForFile(true);
+        }
       }
     }
-  }, [isSender, dataChannel, sendFile, isResuming]);
+  }, [isSender, dataChannel, sendFiles, isResuming]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,9 +92,9 @@ function Transfer() {
       setActiveFile(file);
       setWaitingForFile(false);
       hasStartedRef.current = true;
-      sendFile(file);
+      sendFiles([file]);
     }
-  }, [dataChannel, sendFile]);
+  }, [dataChannel, sendFiles]);
 
   if (!dataChannel) {
     return (
@@ -134,6 +149,11 @@ function Transfer() {
         <h2 className="text-2xl font-bold mb-2">
           {isSender ? 'Sending' : 'Receiving'}
         </h2>
+        {totalFiles > 1 && (
+          <p className="text-gray-500 text-xs mb-1">
+            File {currentFileIndex + 1} of {totalFiles}
+          </p>
+        )}
         {fileName && (
           <p className="text-gray-400 mb-6 text-sm">{fileName}</p>
         )}

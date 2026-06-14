@@ -3,6 +3,13 @@ import { devtools } from 'zustand/middleware';
 
 export type TransferPhase = 'idle' | 'hashing' | 'meta' | 'transferring' | 'verifying' | 'complete' | 'error' | 'cancelled';
 
+export interface BatchFileEntry {
+  name: string;
+  size: number;
+  type: string;
+  transferred: boolean;
+}
+
 export interface TransferState {
   fileName: string | null;
   fileSize: number | null;
@@ -11,6 +18,9 @@ export interface TransferState {
   receiverHash: string | null;
   totalChunks: number;
   chunkSizeBytes: number;
+
+  batchFiles: BatchFileEntry[];
+  currentFileIndex: number;
 
   chunksSent: number;
   chunksAcknowledged: number;
@@ -32,6 +42,10 @@ export interface TransferState {
   setTransferError: (error: string | null) => void;
   setSha256Hash: (hash: string) => void;
   setReceiverHash: (hash: string) => void;
+  setBatchFiles: (files: BatchFileEntry[]) => void;
+  setCurrentFileIndex: (index: number) => void;
+  markBatchFileTransferred: (index: number) => void;
+  resetFileProgress: () => void;
   incrementChunksSent: () => void;
   incrementChunksAcknowledged: () => void;
   incrementChunksReceived: () => void;
@@ -47,6 +61,8 @@ const initialState = {
   receiverHash: null as string | null,
   totalChunks: 0,
   chunkSizeBytes: 16384,
+  batchFiles: [] as BatchFileEntry[],
+  currentFileIndex: 0,
 
   chunksSent: 0,
   chunksAcknowledged: 0,
@@ -79,6 +95,39 @@ export const useTransferStore = create<TransferState>()(
       setSha256Hash: (hash) => set({ sha256Hash: hash }),
 
       setReceiverHash: (hash) => set({ receiverHash: hash }),
+
+      setBatchFiles: (files) => set({ batchFiles: files, currentFileIndex: 0 }),
+
+      setCurrentFileIndex: (index) => set({ currentFileIndex: index }),
+
+      markBatchFileTransferred: (index) =>
+        set((state) => {
+          const updated = [...state.batchFiles];
+          if (updated[index]) {
+            updated[index] = { ...updated[index], transferred: true };
+          }
+          return { batchFiles: updated };
+        }),
+
+      resetFileProgress: () =>
+        set({
+          fileName: null,
+          fileSize: null,
+          fileType: null,
+          sha256Hash: null,
+          receiverHash: null,
+          totalChunks: 0,
+          chunkSizeBytes: 16384,
+          chunksSent: 0,
+          chunksAcknowledged: 0,
+          chunksReceived: 0,
+          bytesTransferred: 0,
+          currentSpeedBps: 0,
+          averageSpeedBps: 0,
+          etaMs: 0,
+          progressPercent: 0,
+          lastAcknowledgedChunk: -1,
+        }),
 
       incrementChunksSent: () => set((state) => ({ chunksSent: state.chunksSent + 1 })),
 

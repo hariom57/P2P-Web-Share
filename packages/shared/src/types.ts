@@ -7,6 +7,12 @@ export interface FileMeta {
   chunkSize: number;
 }
 
+export interface BatchFileInfo {
+  name: string;
+  size: number;
+  type: string;
+}
+
 export interface TransferProgress {
   chunksSent: number;
   chunksAcknowledged: number;

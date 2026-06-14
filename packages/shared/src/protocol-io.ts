@@ -12,6 +12,9 @@ import {
   type CancelMessage,
   type ResumeMessage,
   type ResumeAckMessage,
+  type BatchMetaMessage,
+  type BatchEndMessage,
+  type BatchMetaFileEntry,
   type DataChannelMessage,
 } from './protocol.js';
 
@@ -38,6 +41,10 @@ export function encodeMessage(msg: DataChannelMessage): ArrayBuffer {
       return encodeResume(msg);
     case MessageType.RESUME_ACK:
       return encodeResumeAck(msg);
+    case MessageType.BATCH_META:
+      return encodeBatchMeta(msg);
+    case MessageType.BATCH_END:
+      return encodeBatchEnd(msg);
   }
 }
 
@@ -77,6 +84,10 @@ export function decodeMessage(buffer: ArrayBuffer): DataChannelMessage {
       return decodeResume(payload);
     case MessageType.RESUME_ACK:
       return decodeResumeAck(payload);
+    case MessageType.BATCH_META:
+      return decodeBatchMeta(payload);
+    case MessageType.BATCH_END:
+      return decodeBatchEnd(payload);
     default:
       throw new ProtocolError(`Unknown message type: ${type}`);
   }
@@ -347,6 +358,87 @@ function decodeResumeAck(payload: Uint8Array): ResumeAckMessage {
     type: MessageType.RESUME_ACK,
     lastReceivedChunk: view.getUint32(0, false),
   };
+}
+
+function encodeBatchMeta(msg: BatchMetaMessage): ArrayBuffer {
+  let namesSize = 0;
+  const nameBytesList = msg.files.map((f) => {
+    const b = TEXT_ENCODER.encode(f.name);
+    namesSize += 4 + b.length + 8 + 2 + TEXT_ENCODER.encode(f.type).length;
+    return b;
+  });
+  const typeBytesList = msg.files.map((f) => TEXT_ENCODER.encode(f.type));
+
+  let payloadSize = 4;
+  for (let i = 0; i < msg.files.length; i++) {
+    payloadSize += 4 + nameBytesList[i].length + 8 + 2 + typeBytesList[i].length;
+  }
+
+  const totalSize = 5 + payloadSize;
+  const buf = new ArrayBuffer(totalSize);
+  const view = new DataView(buf);
+
+  view.setUint8(0, MessageType.BATCH_META);
+  view.setUint32(1, payloadSize, false);
+
+  let offset = 5;
+  view.setUint32(offset, msg.files.length, false);
+  offset += 4;
+
+  for (let i = 0; i < msg.files.length; i++) {
+    const nb = nameBytesList[i];
+    const tb = typeBytesList[i];
+    view.setUint32(offset, nb.length, false);
+    offset += 4;
+    new Uint8Array(buf, offset, nb.length).set(nb);
+    offset += nb.length;
+    view.setBigUint64(offset, BigInt(msg.files[i].size), false);
+    offset += 8;
+    view.setUint16(offset, tb.length, false);
+    offset += 2;
+    new Uint8Array(buf, offset, tb.length).set(tb);
+    offset += tb.length;
+  }
+
+  return buf;
+}
+
+function decodeBatchMeta(payload: Uint8Array): BatchMetaMessage {
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  let offset = 0;
+
+  const fileCount = view.getUint32(offset, false);
+  offset += 4;
+
+  const files: BatchMetaFileEntry[] = [];
+  for (let i = 0; i < fileCount; i++) {
+    const nameLen = view.getUint32(offset, false);
+    offset += 4;
+    const name = TEXT_DECODER.decode(payload.slice(offset, offset + nameLen));
+    offset += nameLen;
+    const size = Number(view.getBigUint64(offset, false));
+    offset += 8;
+    const typeLen = view.getUint16(offset, false);
+    offset += 2;
+    const type = TEXT_DECODER.decode(payload.slice(offset, offset + typeLen));
+    offset += typeLen;
+    files.push({ name, size, type });
+  }
+
+  return { type: MessageType.BATCH_META, files };
+}
+
+function encodeBatchEnd(_msg: BatchEndMessage): ArrayBuffer {
+  const totalSize = 5;
+  const buf = new ArrayBuffer(totalSize);
+  const view = new DataView(buf);
+  view.setUint8(0, MessageType.BATCH_END);
+  view.setUint32(1, 0, false);
+  return buf;
+}
+
+function decodeBatchEnd(_payload: Uint8Array): BatchEndMessage {
+  return { type: MessageType.BATCH_END };
 }
 
 export class ProtocolError extends Error {

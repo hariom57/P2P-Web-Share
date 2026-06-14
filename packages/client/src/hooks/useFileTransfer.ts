@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeMessage, decodeMessage, ProtocolError } from '@p2p-share/shared';
 import { MessageType, PROTOCOL_CONSTANTS } from '@p2p-share/shared';
-import type { DataChannelMessage, FileMetaMessage } from '@p2p-share/shared';
+import type { DataChannelMessage, FileMetaMessage, BatchMetaMessage, BatchEndMessage } from '@p2p-share/shared';
 import { FileChunker } from '../services/file-chunker';
 import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../services/sha256';
 import { reassembleFile, triggerDownload } from '../services/file-download';
@@ -33,6 +33,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
   const chunkCountRef = useRef(0);
   const roomIdRef = useRef('');
   const lastSpeedUpdateRef = useRef(0);
+  const batchModeRef = useRef(false);
 
   const transferStore = useTransferStore();
   const addNotification = useUIStore((s) => s.addNotification);
@@ -65,22 +66,13 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     });
   }, [dataChannel]);
 
-  const sendFile = useCallback(async (file: File) => {
-    if (!dataChannel || dataChannel.readyState !== 'open') {
-      setError('DataChannel not open');
-      return;
-    }
-
-    cancelledRef.current = false;
-    setIsTransferring(true);
-    setError(null);
-
+  async function sendSingleFile(file: File, fileIndex: number, totalFiles: number): Promise<boolean> {
+    transferStore.setCurrentFileIndex(fileIndex);
     transferStore.setTransferPhase('hashing');
 
     const fileBuffer = await file.arrayBuffer();
     const fileHash = await computeSHA256(fileBuffer);
-
-    transferStore.setSha256Hash(Array.from(fileHash).map((b) => b.toString(16).padStart(2, '0')).join(''));
+    const fileHashHex = Array.from(fileHash).map((b) => b.toString(16).padStart(2, '0')).join('');
 
     const chunker = new FileChunker(file);
     chunkerRef.current = chunker;
@@ -93,11 +85,10 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
       fileSize: chunker.getFileSize(),
       fileType: chunker.getFileType(),
     });
+    transferStore.setSha256Hash(fileHashHex);
     transferStore.setTransferPhase('meta');
-    transferStore.setProgress({
-      totalChunks,
-      chunkSizeBytes: chunkSize,
-    });
+    transferStore.setProgress({ totalChunks, chunkSizeBytes: chunkSize });
+
     const metaMsg: FileMetaMessage = {
       type: MessageType.FILE_META,
       fileName: chunker.getFileName(),
@@ -108,7 +99,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
       chunkSize,
     };
 
-    dataChannel.send(encodeMessage(metaMsg));
+    dataChannel!.send(encodeMessage(metaMsg));
 
     const metaAck = await new Promise<boolean>((resolve) => {
       sendResolveRef.current = resolve;
@@ -117,8 +108,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
 
     if (!metaAck) {
       setError('File metadata not acknowledged');
-      setIsTransferring(false);
-      return;
+      return false;
     }
 
     if (roomId) {
@@ -139,10 +129,10 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     inFlightRef.current.clear();
     windowSizeRef.current = PROTOCOL_CONSTANTS.MIN_WINDOW_SIZE;
 
-    if (roomId) {
+    if (roomId && fileIndex === 0) {
       const cp = await getCheckpoint(roomId);
       if (cp && cp.lastAcknowledgedChunk > 0) {
-        dataChannel.send(encodeMessage({
+        dataChannel!.send(encodeMessage({
           type: MessageType.RESUME,
           lastAcknowledgedChunk: cp.lastAcknowledgedChunk,
         }));
@@ -216,23 +206,17 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
       }
     }
 
-    if (cancelledRef.current) {
-      setIsTransferring(false);
-      return;
-    }
+    if (cancelledRef.current) return false;
 
     while (inFlightRef.current.size > 0 && !cancelledRef.current) {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
 
-    if (cancelledRef.current) {
-      setIsTransferring(false);
-      return;
-    }
+    if (cancelledRef.current) return false;
 
     transferStore.setTransferPhase('verifying');
 
-    dataChannel.send(encodeMessage({
+    dataChannel!.send(encodeMessage({
       type: MessageType.VERIFY_REQUEST,
       senderHash: fileHash,
     }));
@@ -243,8 +227,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     });
 
     if (verifyResult) {
-      transferStore.setTransferPhase('complete');
-      addNotification({ type: 'success', title: 'Transfer complete', durationMs: 5000 });
+      transferStore.markBatchFileTransferred(fileIndex);
       const meta = fileMetaRef.current;
       if (meta && roomIdRef.current) {
         saveHistoryEntry({
@@ -256,34 +239,77 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
           totalChunks: meta.totalChunks,
           chunksTransferred: transferStore.chunksAcknowledged,
           status: 'completed',
-          sha256Hash: transferStore.sha256Hash,
+          sha256Hash: fileHashHex,
           speedAvgBps: transferStore.averageSpeedBps,
-          startedAt: Date.now() - (transferStore.averageSpeedBps > 0 ? (transferStore.bytesTransferred / transferStore.averageSpeedBps) * 1000 : 0),
+          startedAt: Date.now(),
           completedAt: Date.now(),
         });
       }
-    } else {
-      transferStore.setTransferPhase('error');
-      transferStore.setTransferError('File verification failed');
-      setError('File verification failed');
-      if (roomIdRef.current) {
-        saveHistoryEntry({
-          roomId: roomIdRef.current,
-          role: 'sender',
-          fileName: chunkerRef.current?.getFileName() || 'unknown',
-          fileSize: chunkerRef.current?.getFileSize() || 0,
-          fileType: 'application/octet-stream',
-          totalChunks,
-          chunksTransferred: transferStore.chunksAcknowledged,
-          status: 'error',
-          sha256Hash: transferStore.sha256Hash,
-          speedAvgBps: transferStore.averageSpeedBps,
-          startedAt: Date.now() - (transferStore.averageSpeedBps > 0 ? (transferStore.bytesTransferred / transferStore.averageSpeedBps) * 1000 : 0),
-          completedAt: Date.now(),
-        });
+      return true;
+    }
+
+    transferStore.setTransferPhase('error');
+    transferStore.setTransferError('File verification failed');
+    setError('File verification failed');
+    if (roomIdRef.current) {
+      const meta = fileMetaRef.current;
+      saveHistoryEntry({
+        roomId: roomIdRef.current,
+        role: 'sender',
+        fileName: meta?.fileName || chunker.getFileName() || 'unknown',
+        fileSize: Number(meta?.fileSize || BigInt(chunker.getFileSize() || 0)),
+        fileType: meta?.mimeType || 'application/octet-stream',
+        totalChunks,
+        chunksTransferred: transferStore.chunksAcknowledged,
+        status: 'error',
+        sha256Hash: fileHashHex,
+        speedAvgBps: transferStore.averageSpeedBps,
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+      });
+    }
+    return false;
+  }
+
+  const sendFiles = useCallback(async (files: File[]) => {
+    if (!dataChannel || dataChannel.readyState !== 'open') {
+      setError('DataChannel not open');
+      return;
+    }
+
+    cancelledRef.current = false;
+    setIsTransferring(true);
+    setError(null);
+    transferStore.setBatchFiles(files.map((f) => ({ name: f.name, size: f.size, type: f.type, transferred: false })));
+
+    const batchMeta: BatchMetaMessage = {
+      type: MessageType.BATCH_META,
+      files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
+    };
+    dataChannel.send(encodeMessage(batchMeta));
+
+    for (let i = 0; i < files.length; i++) {
+      if (cancelledRef.current) break;
+      if (i > 0) {
+        transferStore.resetFileProgress();
+      }
+      const ok = await sendSingleFile(files[i], i, files.length);
+      if (!ok) {
+        setIsTransferring(false);
+        return;
       }
     }
 
+    if (cancelledRef.current) {
+      setIsTransferring(false);
+      return;
+    }
+
+    dataChannel.send(encodeMessage({ type: MessageType.BATCH_END }));
+
+    transferStore.setTransferPhase('complete');
+    const fileCount = files.length;
+    addNotification({ type: 'success', title: fileCount > 1 ? `${fileCount} files transferred` : 'Transfer complete', durationMs: 5000 });
     setIsTransferring(false);
     if (roomIdRef.current) {
       deleteCheckpoint(roomIdRef.current);
@@ -348,6 +374,27 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
       }
 
       switch (msg.type) {
+        case MessageType.BATCH_META: {
+          batchModeRef.current = true;
+          transferStore.setBatchFiles(
+            msg.files.map((f) => ({ name: f.name, size: f.size, type: f.type, transferred: false })),
+          );
+          break;
+        }
+
+        case MessageType.BATCH_END: {
+          if (batchModeRef.current) {
+            transferStore.setTransferPhase('complete');
+            addNotification({
+              type: 'success',
+              title: `All ${transferStore.batchFiles.length} files received`,
+              durationMs: 5000,
+            });
+          }
+          batchModeRef.current = false;
+          break;
+        }
+
         case MessageType.FILE_META: {
           fileMetaRef.current = msg;
           setReceivedFileMeta(msg);
@@ -479,7 +526,9 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
               const receiverHash = await computeSHA256FromChunks(allChunks);
               match = areHashesEqual(receiverHash, msg.senderHash);
               if (match) {
-                transferStore.setTransferPhase('complete');
+                if (!batchModeRef.current) {
+                  transferStore.setTransferPhase('complete');
+                }
                 const decryptedChunks = new Map<number, Uint8Array>();
                 for (let i = 0; i < meta.totalChunks; i++) {
                   decryptedChunks.set(i, allChunks[i]);
@@ -509,6 +558,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
                 );
                 transferStore.setTransferPhase('error');
                 transferStore.setTransferError('Hash mismatch');
+                batchModeRef.current = false;
               }
             }
           }
@@ -592,7 +642,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
   }, [dataChannel, transferStore, addNotification]);
 
   return {
-    sendFile,
+    sendFiles,
     cancel,
     isTransferring,
     error,

@@ -2,28 +2,94 @@ import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { connectSocket } from '../services/socket';
 import { useRoomStore } from '../stores/roomStore';
-import { setActiveFile, setEncryptionKey } from '../services/data-channel-registry';
+import { setActiveFile, setActiveFiles, setEncryptionKey } from '../services/data-channel-registry';
 import { generateEncryptionKey, exportKey } from '../services/encryption';
 
 function Landing() {
   const navigate = useNavigate();
   const [isDragOver, setIsDragOver] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { setRoomPhase } = useRoomStore();
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const v = bytes / Math.pow(1024, i);
+    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  };
+
   const handleFiles = useCallback((files: FileList) => {
     setCreateError(null);
-    if (files.length > 0) setSelectedFile(files[0]);
+    if (files.length > 0) {
+      setSelectedFiles(prev => {
+        const existing = new Set(prev.map(f => f.name + f.size));
+        const newFiles = Array.from(files).filter(f => !existing.has(f.name + f.size));
+        return [...prev, ...newFiles];
+      });
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-    if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+    const items = e.dataTransfer.items;
+    if (items) {
+      const filePromises: Promise<File[]>[] = [];
+      for (let i = 0; i < items.length; i++) {
+        const entry = (items[i] as unknown as { webkitGetAsEntry?: () => FileSystemEntry | null }).webkitGetAsEntry?.() ?? null;
+        if (entry?.isDirectory) {
+          filePromises.push(traverseDirectory(entry as FileSystemDirectoryEntry));
+        }
+      }
+      if (filePromises.length > 0) {
+        Promise.all(filePromises).then((nested) => {
+          const allFiles = nested.flat();
+          if (allFiles.length > 0) {
+            setSelectedFiles(prev => {
+              const existing = new Set(prev.map(f => f.name + f.size));
+              const newFiles = allFiles.filter(f => !existing.has(f.name + f.size));
+              return [...prev, ...newFiles];
+            });
+          }
+        });
+      } else if (e.dataTransfer.files.length > 0) {
+        handleFiles(e.dataTransfer.files);
+      }
+    } else if (e.dataTransfer.files.length > 0) {
+      handleFiles(e.dataTransfer.files);
+    }
   }, [handleFiles]);
+
+  function traverseDirectory(entry: FileSystemDirectoryEntry): Promise<File[]> {
+    return new Promise((resolve) => {
+      const reader = entry.createReader();
+      const allEntries: FileSystemEntry[] = [];
+      function readBatch() {
+        reader.readEntries((entries) => {
+          if (entries.length === 0) {
+            Promise.all(
+              allEntries.map((e) => {
+                if (e.isFile) {
+                  return new Promise<File[]>((res) => {
+                    (e as FileSystemFileEntry).file((f) => res([f]));
+                  });
+                }
+                return traverseDirectory(e as FileSystemDirectoryEntry);
+              }),
+            ).then((nested) => resolve(nested.flat()));
+          } else {
+            allEntries.push(...entries);
+            readBatch();
+          }
+        });
+      }
+      readBatch();
+    });
+  }
 
   const handleFileSelect = useCallback(() => {
     fileInputRef.current?.click();
@@ -33,8 +99,12 @@ function Landing() {
     if (e.target.files) handleFiles(e.target.files);
   }, [handleFiles]);
 
+  const removeFile = useCallback((index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   const createRoom = useCallback(async () => {
-    if (isCreating || !selectedFile) return;
+    if (isCreating || selectedFiles.length === 0) return;
     setIsCreating(true);
     setCreateError(null);
     setRoomPhase('creating');
@@ -47,13 +117,16 @@ function Landing() {
     if (!socket.connected) socket.connect();
 
     socket.once('room-created', (data: { roomId: string }) => {
-      setActiveFile(selectedFile);
+      setActiveFiles(selectedFiles);
+      setActiveFile(null);
       setRoomPhase('waiting');
       navigate(`/room/${data.roomId}#key=${keyBase64}`, {
         state: {
-          fileName: selectedFile.name,
-          fileSize: selectedFile.size,
-          fileType: selectedFile.type,
+          files: selectedFiles.map((f) => ({
+            fileName: f.name,
+            fileSize: f.size,
+            fileType: f.type,
+          })),
         },
       });
     });
@@ -65,7 +138,7 @@ function Landing() {
     });
 
     socket.emit('create-room');
-  }, [isCreating, selectedFile, navigate]);
+  }, [isCreating, selectedFiles, navigate]);
 
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4">
@@ -80,6 +153,7 @@ function Landing() {
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           className="hidden"
           onChange={handleInputChange}
         />
@@ -88,32 +162,46 @@ function Landing() {
           className={`border-2 border-dashed rounded-xl p-12 transition-colors cursor-pointer mb-6 ${
             isDragOver
               ? 'border-blue-500 bg-blue-500/10'
-              : selectedFile
+              : selectedFiles.length > 0
                 ? 'border-green-500 bg-green-500/10'
                 : 'border-gray-700 hover:border-blue-500'
           }`}
           onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
           onDragLeave={() => setIsDragOver(false)}
           onDrop={handleDrop}
-          onClick={!selectedFile ? handleFileSelect : undefined}
+          onClick={selectedFiles.length === 0 ? handleFileSelect : undefined}
         >
-          {selectedFile ? (
+          {selectedFiles.length > 0 ? (
             <div>
-              <p className="text-green-400 text-lg font-semibold">{selectedFile.name}</p>
-              <p className="text-gray-500 text-sm mt-1">
-                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+              <p className="text-green-400 text-lg font-semibold mb-2">
+                {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
               </p>
+              <div className="max-h-40 overflow-y-auto space-y-1 mb-3">
+                {selectedFiles.map((f, i) => (
+                  <div key={`${f.name}-${f.size}`} className="flex items-center justify-between text-sm px-2">
+                    <span className="text-gray-300 truncate mr-2 text-left flex-1">{f.name}</span>
+                    <span className="text-gray-500 whitespace-nowrap">{formatFileSize(f.size)}</span>
+                    <button
+                      className="ml-2 text-gray-600 hover:text-red-400 transition-colors"
+                      onClick={(e) => { e.stopPropagation(); removeFile(i); }}
+                      title="Remove"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                ))}
+              </div>
               <button
-                className="mt-3 text-sm text-gray-500 hover:text-gray-300 underline"
-                onClick={(e) => { e.stopPropagation(); setSelectedFile(null); }}
+                className="text-sm text-gray-500 hover:text-gray-300 underline"
+                onClick={(e) => { e.stopPropagation(); setSelectedFiles([]); }}
               >
-                Remove
+                Clear All
               </button>
             </div>
           ) : (
             <div>
-              <p className="text-gray-500 text-lg">Drop your file here</p>
-              <p className="text-gray-600 text-sm mt-2">or click to browse</p>
+              <p className="text-gray-500 text-lg">Drop your files here</p>
+              <p className="text-gray-600 text-sm mt-2">or click to browse (folders supported)</p>
             </div>
           )}
         </div>
@@ -133,11 +221,11 @@ function Landing() {
 
         <button
           className={`w-full py-3 px-6 rounded-lg font-semibold text-lg transition-all ${
-            selectedFile && !isCreating
+            selectedFiles.length > 0 && !isCreating
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
               : 'bg-gray-800 text-gray-500 cursor-not-allowed'
           }`}
-          disabled={!selectedFile || isCreating}
+          disabled={selectedFiles.length === 0 || isCreating}
           onClick={createRoom}
         >
           {isCreating ? 'Creating room...' : 'Create Share Link'}

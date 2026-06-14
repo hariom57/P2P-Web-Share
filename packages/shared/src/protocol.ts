@@ -8,6 +8,8 @@ export enum MessageType {
   CANCEL = 0x06,
   RESUME = 0x07,
   RESUME_ACK = 0x08,
+  BATCH_META = 0x09,
+  BATCH_END = 0x0A,
 }
 
 export enum ChunkAckStatus {
@@ -86,6 +88,21 @@ export interface ResumeAckMessage {
   lastReceivedChunk: number;
 }
 
+export interface BatchMetaFileEntry {
+  name: string;
+  size: number;
+  type: string;
+}
+
+export interface BatchMetaMessage {
+  type: MessageType.BATCH_META;
+  files: BatchMetaFileEntry[];
+}
+
+export interface BatchEndMessage {
+  type: MessageType.BATCH_END;
+}
+
 export type DataChannelMessage =
   | FileMetaMessage
   | ChunkMessage
@@ -95,7 +112,9 @@ export type DataChannelMessage =
   | ErrorMessage
   | CancelMessage
   | ResumeMessage
-  | ResumeAckMessage;
+  | ResumeAckMessage
+  | BatchMetaMessage
+  | BatchEndMessage;
 
 export const PROTOCOL_CONSTANTS = {
   ENVELOPE_HEADER_SIZE: 5,

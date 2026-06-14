@@ -15,8 +15,8 @@ function Room() {
   const location = useLocation();
   const hasJoinedRef = useRef(false);
 
-  const fileState = location.state as { fileName?: string; fileSize?: number; fileType?: string } | null;
-  const isSender = !!fileState?.fileName;
+  const fileState = location.state as { fileName?: string; fileSize?: number; fileType?: string; files?: { fileName: string; fileSize: number; fileType: string }[] } | null;
+  const isSender = !!(fileState?.fileName || fileState?.files);
   const roomIdFull = roomId || '';
 
   const { roomPhase, roomError, peerConnected } = useRoomStore();
@@ -24,12 +24,15 @@ function Room() {
 
   const onDataChannel = useCallback((channel: RTCDataChannel) => {
     setActiveDataChannel(channel);
-    navigate(`/transfer/${roomIdFull}`, {
-      state: {
-        ...fileState,
-        isResuming: getResumeAfterConnect(),
-      },
-    });
+    const navState: Record<string, unknown> = { isResuming: getResumeAfterConnect() };
+    if (fileState?.files && fileState.files.length > 0) {
+      navState.files = fileState.files;
+    } else if (fileState?.fileName) {
+      navState.fileName = fileState.fileName;
+      navState.fileSize = fileState.fileSize;
+      navState.fileType = fileState.fileType;
+    }
+    navigate(`/transfer/${roomIdFull}`, { state: navState });
   }, [roomIdFull, navigate, fileState]);
 
   const { startConnection, error } = useWebRTC({
@@ -165,10 +168,18 @@ function Room() {
           <span className={s.color}>{s.text}</span>
         </div>
 
-        {isSender && fileState?.fileName && (
-          <p className="text-gray-500 text-sm mt-4">
-            Sending: <span className="text-gray-300">{fileState.fileName}</span>
-          </p>
+        {isSender && fileState && (
+          <div className="text-gray-500 text-sm mt-4">
+            {fileState.files && fileState.files.length > 1 ? (
+              <p>
+                Sending: <span className="text-gray-300">{fileState.files.length} files</span>
+              </p>
+            ) : fileState.fileName ? (
+              <p>
+                Sending: <span className="text-gray-300">{fileState.fileName}</span>
+              </p>
+            ) : null}
+          </div>
         )}
 
         <button

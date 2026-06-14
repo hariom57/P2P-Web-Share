@@ -48,7 +48,7 @@ describe('useFileTransfer', () => {
     expect(result.current.isTransferring).toBe(false);
     expect(result.current.error).toBeNull();
     expect(result.current.receivedFileMeta).toBeNull();
-    expect(typeof result.current.sendFile).toBe('function');
+    expect(typeof result.current.sendFiles).toBe('function');
     expect(typeof result.current.cancel).toBe('function');
   });
 

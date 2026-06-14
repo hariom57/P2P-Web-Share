@@ -1,5 +1,6 @@
 let activeDataChannel: RTCDataChannel | null = null;
 let activeFile: File | null = null;
+let activeFiles: File[] | null = null;
 let encryptionKey: CryptoKey | null = null;
 let resumeAfterConnect = false;
 
@@ -17,6 +18,14 @@ export function setActiveFile(file: File | null) {
 
 export function getActiveFile(): File | null {
   return activeFile;
+}
+
+export function setActiveFiles(files: File[] | null) {
+  activeFiles = files;
+}
+
+export function getActiveFiles(): File[] | null {
+  return activeFiles;
 }
 
 export function setEncryptionKey(key: CryptoKey | null) {
@@ -38,6 +47,7 @@ export function getResumeAfterConnect(): boolean {
 export function resetAll() {
   activeDataChannel = null;
   activeFile = null;
+  activeFiles = null;
   encryptionKey = null;
   resumeAfterConnect = false;
 }

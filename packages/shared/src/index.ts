@@ -24,6 +24,9 @@ export type {
   CancelMessage,
   ResumeMessage,
   ResumeAckMessage,
+  BatchMetaMessage,
+  BatchEndMessage,
+  BatchMetaFileEntry,
 } from './protocol';
 export {
   MessageType,

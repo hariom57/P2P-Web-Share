@@ -262,6 +262,71 @@ describe('Protocol I/O', () => {
     });
   });
 
+  describe('BATCH_META', () => {
+    it('should round-trip a batch meta message with single file', () => {
+      const original = {
+        type: MessageType.BATCH_META as const,
+        files: [{ name: 'doc.pdf', size: 1024, type: 'application/pdf' }],
+      };
+
+      const encoded = encodeMessage(original);
+      const decoded = decodeMessage(encoded);
+
+      expect(decoded.type).toBe(MessageType.BATCH_META);
+      if (decoded.type === MessageType.BATCH_META) {
+        expect(decoded.files).toHaveLength(1);
+        expect(decoded.files[0].name).toBe('doc.pdf');
+        expect(decoded.files[0].size).toBe(1024);
+        expect(decoded.files[0].type).toBe('application/pdf');
+      }
+    });
+
+    it('should round-trip batch meta with multiple files', () => {
+      const original = {
+        type: MessageType.BATCH_META as const,
+        files: [
+          { name: 'a.txt', size: 100, type: 'text/plain' },
+          { name: 'b.jpg', size: 200000, type: 'image/jpeg' },
+          { name: 'c.mp4', size: 50000000, type: 'video/mp4' },
+        ],
+      };
+
+      const encoded = encodeMessage(original);
+      const decoded = decodeMessage(encoded);
+
+      expect(decoded.type).toBe(MessageType.BATCH_META);
+      if (decoded.type === MessageType.BATCH_META) {
+        expect(decoded.files).toHaveLength(3);
+        expect(decoded.files[1].name).toBe('b.jpg');
+        expect(decoded.files[2].size).toBe(50000000);
+      }
+    });
+
+    it('should handle long file names in batch meta', () => {
+      const original = {
+        type: MessageType.BATCH_META as const,
+        files: [{ name: 'x'.repeat(255), size: 0, type: 'application/octet-stream' }],
+      };
+
+      const encoded = encodeMessage(original);
+      const decoded = decodeMessage(encoded);
+
+      expect(decoded.type).toBe(MessageType.BATCH_META);
+      if (decoded.type === MessageType.BATCH_META) {
+        expect(decoded.files[0].name.length).toBe(255);
+      }
+    });
+  });
+
+  describe('BATCH_END', () => {
+    it('should round-trip a batch end message', () => {
+      const original = { type: MessageType.BATCH_END as const };
+      const encoded = encodeMessage(original);
+      const decoded = decodeMessage(encoded);
+      expect(decoded.type).toBe(MessageType.BATCH_END);
+    });
+  });
+
   describe('protocol errors', () => {
     it('should reject messages shorter than 5 bytes', () => {
       const buf = new ArrayBuffer(3);
