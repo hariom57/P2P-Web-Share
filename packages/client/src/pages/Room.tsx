@@ -8,6 +8,15 @@ import { importKey } from '../services/encryption';
 import { getCheckpoint, deleteCheckpoint, deleteRoomChunks } from '../services/checkpoint-store';
 import { useResumeStore } from '../stores/resumeStore';
 import ResumePrompt from '../components/ResumePrompt';
+import QRCode from '../components/QRCode';
+
+function keyFingerprint(hash: string): string | null {
+  const match = hash.match(/key=([A-Za-z0-9+/=]+)/);
+  if (!match) return null;
+  const raw = atob(match[1]);
+  const hex = Array.from(raw).map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 4).toUpperCase()} ${hex.slice(4, 8).toUpperCase()} ${hex.slice(8, 12).toUpperCase()} ${hex.slice(12, 16).toUpperCase()}`;
+}
 
 function Room() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -126,7 +135,7 @@ function Room() {
   }, []);
 
   const copyRoomLink = useCallback(() => {
-    const link = `${window.location.origin}/room/${roomIdFull}`;
+    const link = `${window.location.origin}/room/${roomIdFull}${window.location.hash}`;
     navigator.clipboard.writeText(link);
   }, [roomIdFull]);
 
@@ -139,6 +148,8 @@ function Room() {
     return { text: 'Initializing...', color: 'text-gray-400', dot: 'bg-gray-500' };
   };
 
+  const fingerprint = keyFingerprint(window.location.hash);
+
   const s = status();
 
   return (
@@ -150,7 +161,7 @@ function Room() {
         </p>
 
         {isSender && (
-          <div className="flex items-center gap-2 bg-gray-900 rounded-lg p-3 mb-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+          <div className="flex items-center gap-2 bg-gray-900 rounded-lg p-3 mb-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
             <div className="flex-1 min-w-0">
               <code className="block text-blue-400 font-mono text-sm truncate">
                 {`${window.location.origin}/room/${roomIdFull}`}
@@ -165,10 +176,26 @@ function Room() {
           </div>
         )}
 
+        {isSender && (
+          <div className="flex flex-col items-center gap-2 mb-4 animate-slide-up" style={{ animationDelay: '0.15s' }}>
+            <div className="bg-gray-900 rounded-lg p-3">
+              <QRCode text={`${window.location.origin}/room/${roomIdFull}${window.location.hash}`} />
+            </div>
+            <p className="text-xs text-gray-500">Scan to join</p>
+          </div>
+        )}
+
         <div className="flex items-center justify-center gap-2 mb-2">
           <div className={`w-3 h-3 rounded-full ${s.dot}`} />
           <span className={s.color}>{s.text}</span>
         </div>
+
+        {fingerprint && (
+          <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
+            <p className="text-xs text-gray-600 mb-1">Encryption fingerprint</p>
+            <code className="font-mono text-xs text-gray-500 tracking-widest select-all">{fingerprint}</code>
+          </div>
+        )}
 
         {isSender && fileState && (
           <div className="text-gray-500 text-sm mt-4">
