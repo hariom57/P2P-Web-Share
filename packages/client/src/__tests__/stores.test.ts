@@ -109,12 +109,53 @@ describe('transferStore', () => {
     expect(useTransferStore.getState().progressPercent).toBe(50);
   });
 
-  it('should calculate speed with exponential moving average', () => {
+  it('should calculate instantaneous speed correctly', () => {
     useTransferStore.getState().updateSpeed(16000, 1000);
     expect(useTransferStore.getState().currentSpeedBps).toBe(16000);
+  });
 
+  it('should apply exponential moving average for speed', () => {
     useTransferStore.getState().updateSpeed(16000, 1000);
-    expect(useTransferStore.getState().averageSpeedBps).toBeGreaterThan(0);
+    const first = useTransferStore.getState().averageSpeedBps;
+    expect(first).toBe(16000);
+
+    useTransferStore.getState().updateSpeed(8000, 1000);
+    const second = useTransferStore.getState().averageSpeedBps;
+    expect(second).toBeCloseTo(0.7 * 16000 + 0.3 * 8000, 1);
+
+    useTransferStore.getState().updateSpeed(0, 1000);
+    const third = useTransferStore.getState().averageSpeedBps;
+    expect(third).toBeCloseTo(0.7 * (0.7 * 16000 + 0.3 * 8000) + 0.3 * 0, 1);
+  });
+
+  it('should accumulate bytesTransferred', () => {
+    useTransferStore.getState().updateSpeed(1000, 500);
+    expect(useTransferStore.getState().bytesTransferred).toBe(1000);
+
+    useTransferStore.getState().updateSpeed(2000, 500);
+    expect(useTransferStore.getState().bytesTransferred).toBe(3000);
+  });
+
+  it('should calculate ETA based on remaining bytes and average speed', () => {
+    useTransferStore.getState().setFileMetadata({
+      fileName: 'test.bin', fileSize: 100000, fileType: 'application/octet-stream',
+    });
+    useTransferStore.getState().updateSpeed(10000, 1000);
+    const transferred = useTransferStore.getState().bytesTransferred;
+    const avgSpeed = useTransferStore.getState().averageSpeedBps;
+    const remaining = 100000 - transferred;
+    const expectedEta = (remaining / avgSpeed) * 1000;
+    expect(useTransferStore.getState().etaMs).toBeCloseTo(expectedEta, 0);
+  });
+
+  it('should return zero ETA when no file size is set', () => {
+    useTransferStore.getState().updateSpeed(16000, 1000);
+    expect(useTransferStore.getState().etaMs).toBe(0);
+  });
+
+  it('should return zero speed when elapsed time is zero', () => {
+    useTransferStore.getState().updateSpeed(16000, 0);
+    expect(useTransferStore.getState().currentSpeedBps).toBe(0);
   });
 
   it('should handle error state', () => {

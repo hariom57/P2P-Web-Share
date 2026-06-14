@@ -44,6 +44,8 @@ function Transfer() {
   const totalChunks = useTransferStore((s) => s.totalChunks);
   const etaMs = useTransferStore((s) => s.etaMs);
   const fileName = useTransferStore((s) => s.fileName);
+  const fileSize = useTransferStore((s) => s.fileSize);
+  const bytesTransferred = useTransferStore((s) => s.bytesTransferred);
 
   useEffect(() => {
     if (transferPhase === 'complete' || transferPhase === 'error' || transferPhase === 'cancelled') {
@@ -94,6 +96,14 @@ function Transfer() {
     if (bps === 0) return '-- MB/s';
     const mbps = bps / 1024 / 1024;
     return mbps >= 1 ? `${mbps.toFixed(2)} MB/s` : `${(bps / 1024).toFixed(1)} KB/s`;
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const v = bytes / Math.pow(1024, i);
+    return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
   };
 
   const formatEta = (ms: number) => {
@@ -156,16 +166,21 @@ function Transfer() {
               <div className="text-white font-medium">{formatEta(etaMs)}</div>
             </div>
             <div className="text-left text-gray-500">
+              <div>Avg Speed</div>
+              <div className="text-white font-medium">{formatSpeed(averageSpeed)}</div>
+            </div>
+            <div className="text-right text-gray-500">
               <div>Chunks</div>
               <div className="text-white font-medium">
                 {isSender ? chunksAcknowledged : chunksReceived}/{totalChunks}
               </div>
             </div>
-            <div className="text-right text-gray-500">
-              <div>Avg Speed</div>
-              <div className="text-white font-medium">{formatSpeed(averageSpeed)}</div>
-            </div>
           </div>
+          {fileSize !== null && fileSize > 0 && (
+            <div className="text-xs text-gray-500 mt-3">
+              {formatFileSize(bytesTransferred)} / {formatFileSize(fileSize)}
+            </div>
+          )}
         </div>
 
         {error && (

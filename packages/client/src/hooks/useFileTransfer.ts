@@ -32,6 +32,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
   const fileMetaRef = useRef<FileMetaMessage | null>(null);
   const chunkCountRef = useRef(0);
   const roomIdRef = useRef('');
+  const lastSpeedUpdateRef = useRef(0);
 
   const transferStore = useTransferStore();
   const addNotification = useUIStore((s) => s.addNotification);
@@ -169,6 +170,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     }
 
     chunkCountRef.current = 0;
+    lastSpeedUpdateRef.current = Date.now();
     while (!cancelledRef.current) {
       const chunk = await chunker.readNextChunk();
       if (!chunk) break;
@@ -193,7 +195,9 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
       if (sendMessage(encoded)) {
         inFlightRef.current.add(chunk.sequence);
         transferStore.incrementChunksSent();
-        transferStore.updateSpeed(chunk.data.length, 100);
+        const now = Date.now();
+        transferStore.updateSpeed(chunk.data.length, now - lastSpeedUpdateRef.current);
+        lastSpeedUpdateRef.current = now;
         transferStore.setProgress({ lastAcknowledgedChunk: -1 });
         if (roomId && chunk.sequence % 10 === 0) {
           const p = transferStore;
@@ -347,6 +351,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         case MessageType.FILE_META: {
           fileMetaRef.current = msg;
           setReceivedFileMeta(msg);
+          lastSpeedUpdateRef.current = Date.now();
           if (roomIdRef.current) {
             const cp = await getCheckpoint(roomIdRef.current);
             if (cp && cp.lastReceivedChunk > 0) {
@@ -355,9 +360,11 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
                 receivedChunks.set(seq, data);
               }
               const ackedChunks = cp.lastReceivedChunk + 1;
+              const chunkSize = msg.chunkSize || transferStore.chunkSizeBytes;
               transferStore.setProgress({
                 chunksReceived: ackedChunks,
                 lastAcknowledgedChunk: cp.lastReceivedChunk,
+                bytesTransferred: ackedChunks * chunkSize,
               });
               transferStore.setFileMetadata({
                 fileName: msg.fileName,
@@ -407,6 +414,9 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         case MessageType.CHUNK: {
           receivedChunks.set(msg.sequence, msg.data);
           transferStore.incrementChunksReceived();
+          const now = Date.now();
+          transferStore.updateSpeed(msg.data.length, now - lastSpeedUpdateRef.current);
+          lastSpeedUpdateRef.current = now;
           chunkCountRef.current++;
           if (roomIdRef.current) {
             saveChunk(roomIdRef.current, msg.sequence, msg.data);
