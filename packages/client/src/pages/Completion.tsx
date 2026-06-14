@@ -46,9 +46,9 @@ function Completion() {
       <div className="text-center max-w-lg w-full">
         {phase === 'complete' && (
           <>
-            <div className="text-6xl mb-4 text-green-400">&#10003;</div>
-            <h2 className="text-2xl font-bold mb-2">Transfer Complete</h2>
-            <p className="text-gray-400 mb-6">
+            <div className="text-6xl mb-4 text-green-400 animate-scale-in">&#10003;</div>
+            <h2 className="text-2xl font-bold mb-2 animate-slide-up" style={{ animationDelay: '0.1s' }}>Transfer Complete</h2>
+            <p className="text-gray-400 mb-6 animate-fade-in" style={{ animationDelay: '0.2s' }}>
               {fileNames && fileNames.length > 1
                 ? `${fileNames.length} files transferred successfully.`
                 : fileNames && fileNames.length === 1

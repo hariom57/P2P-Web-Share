@@ -72,7 +72,7 @@ function History() {
 
         <div className="flex gap-2 mb-4 flex-wrap">
           <select
-            className="bg-gray-800 text-sm rounded-lg px-3 py-1.5 border border-gray-700 text-gray-300"
+            className="bg-gray-800 text-sm rounded-lg px-3 py-1.5 border border-gray-700 text-gray-300 outline-none focus:border-blue-500 transition-colors"
             value={filterRole}
             onChange={(e) => setFilterRole(e.target.value as RoleFilter)}
           >
@@ -81,7 +81,7 @@ function History() {
             <option value="receiver">Receiver</option>
           </select>
           <select
-            className="bg-gray-800 text-sm rounded-lg px-3 py-1.5 border border-gray-700 text-gray-300"
+            className="bg-gray-800 text-sm rounded-lg px-3 py-1.5 border border-gray-700 text-gray-300 outline-none focus:border-blue-500 transition-colors"
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value as StatusFilter)}
           >
@@ -93,26 +93,27 @@ function History() {
         </div>
 
         {isLoading && (
-          <div className="text-center text-gray-500 py-12">Loading...</div>
+          <div className="text-center text-gray-500 py-12 animate-fade-in">Loading...</div>
         )}
 
         {!isLoading && filtered.length === 0 && (
-          <div className="text-center text-gray-500 py-12">
+          <div className="text-center text-gray-500 py-12 animate-fade-in">
             <p className="text-lg mb-2">No transfers yet</p>
             <p className="text-sm">Completed transfers will appear here</p>
           </div>
         )}
 
         <div className="space-y-2">
-          {filtered.map((entry) => (
+          {filtered.map((entry, i) => (
             <div
               key={entry.roomId}
-              className="bg-gray-900 rounded-lg p-4 flex items-center gap-4"
+              className="bg-gray-900 rounded-lg p-4 flex items-center gap-4 transition-all duration-200 hover:bg-gray-800 hover:ring-1 hover:ring-gray-700 animate-slide-up"
+              style={{ animationDelay: `${i * 0.03}s` }}
             >
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
                   <span className="font-medium truncate">{entry.fileName}</span>
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full ${statusColors[entry.status] || 'text-gray-400'}`}>
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${statusColors[entry.status] || 'text-gray-400'}`}>
                     {statusLabels[entry.status] || entry.status}
                   </span>
                 </div>
@@ -137,21 +138,21 @@ function History() {
         </div>
 
         {confirmClear && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-            <div className="bg-gray-900 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-gray-800">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 animate-fade-in">
+            <div className="bg-gray-900 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-gray-800 animate-scale-in">
               <h3 className="text-lg font-semibold mb-2">Clear all history?</h3>
               <p className="text-gray-400 text-sm mb-4">
                 This will delete all transfer history entries. Associated checkpoint data will also be cleaned up.
               </p>
               <div className="flex gap-3">
                 <button
-                  className="flex-1 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors"
+                  className="flex-1 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-all duration-200 active:scale-95"
                   onClick={() => { clearAll(); setConfirmClear(false); }}
                 >
                   Clear
                 </button>
                 <button
-                  className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg font-medium transition-colors"
+                  className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg font-medium transition-all duration-200 active:scale-95"
                   onClick={() => setConfirmClear(false)}
                 >
                   Cancel

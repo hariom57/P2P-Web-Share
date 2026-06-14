@@ -144,18 +144,20 @@ function Room() {
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4">
       <div className="text-center max-w-lg w-full">
-        <h2 className="text-2xl font-bold mb-2">Share Link</h2>
-        <p className="text-gray-400 mb-6 text-sm">
+        <h2 className="text-2xl font-bold mb-2 animate-slide-up">Share Link</h2>
+        <p className="text-gray-400 mb-6 text-sm animate-slide-up" style={{ animationDelay: '0.05s' }}>
           Share this link with the person you want to transfer to
         </p>
 
         {isSender && (
-          <div className="flex items-center gap-2 bg-gray-900 rounded-lg p-3 mb-6">
-            <code className="flex-1 text-blue-400 font-mono text-sm truncate">
-              {`${window.location.origin}/room/${roomIdFull}`}
-            </code>
+          <div className="flex items-center gap-2 bg-gray-900 rounded-lg p-3 mb-6 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <div className="flex-1 min-w-0">
+              <code className="block text-blue-400 font-mono text-sm truncate">
+                {`${window.location.origin}/room/${roomIdFull}`}
+              </code>
+            </div>
             <button
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-sm font-medium transition-colors"
+              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-sm font-medium transition-all duration-200 active:scale-95 whitespace-nowrap"
               onClick={copyRoomLink}
             >
               Copy

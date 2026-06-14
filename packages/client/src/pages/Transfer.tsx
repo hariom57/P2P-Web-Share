@@ -167,11 +167,11 @@ function Transfer() {
 
           <div className="w-full bg-gray-800 rounded-full h-3 mb-4 overflow-hidden">
             <div
-              className={`h-3 rounded-full transition-all duration-300 ${
+              className={`h-3 rounded-full transition-all duration-500 ease-out ${
                 transferPhase === 'complete' ? 'bg-green-500' :
                 transferPhase === 'error' ? 'bg-red-500' :
                 transferPhase === 'cancelled' ? 'bg-gray-500' :
-                'bg-blue-600'
+                'bg-blue-600 animate-progress-stripe'
               }`}
               style={{ width: `${Math.min(progress, 100)}%` }}
             />

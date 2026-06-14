@@ -143,10 +143,10 @@ function Landing() {
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4">
       <div className="text-center max-w-lg w-full">
-        <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+        <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-purple-500 to-blue-400 bg-clip-text text-transparent animate-gradient-shift">
           P2P Web Share
         </h1>
-        <p className="text-gray-400 mb-8 text-lg">
+        <p className="text-gray-400 mb-8 text-lg animate-fade-in">
           Direct browser-to-browser file transfer. No uploads. No servers.
         </p>
 
@@ -199,10 +199,11 @@ function Landing() {
               </button>
             </div>
           ) : (
-            <div>
-              <p className="text-gray-500 text-lg">Drop your files here</p>
-              <p className="text-gray-600 text-sm mt-2">or click to browse (folders supported)</p>
-            </div>
+          <div>
+            <div className="text-4xl mb-3 text-gray-600">&#8682;</div>
+            <p className="text-gray-500 text-lg">Drop your files here</p>
+            <p className="text-gray-600 text-sm mt-2">or click to browse (folders supported)</p>
+          </div>
           )}
         </div>
 
@@ -220,9 +221,9 @@ function Landing() {
         </div>
 
         <button
-          className={`w-full py-3 px-6 rounded-lg font-semibold text-lg transition-all ${
+          className={`w-full py-3 px-6 rounded-lg font-semibold text-lg transition-all duration-200 ${
             selectedFiles.length > 0 && !isCreating
-              ? 'bg-blue-600 hover:bg-blue-700 text-white'
+              ? 'bg-blue-600 hover:bg-blue-700 text-white hover:animate-glow-pulse active:scale-[0.98]'
               : 'bg-gray-800 text-gray-500 cursor-not-allowed'
           }`}
           disabled={selectedFiles.length === 0 || isCreating}
