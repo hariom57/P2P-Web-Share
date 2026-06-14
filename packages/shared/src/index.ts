@@ -22,6 +22,8 @@ export type {
   VerifyResponseMessage,
   ErrorMessage,
   CancelMessage,
+  ResumeMessage,
+  ResumeAckMessage,
 } from './protocol';
 export {
   MessageType,
@@ -30,6 +32,7 @@ export {
   CancelReason,
   PROTOCOL_CONSTANTS,
 } from './protocol';
+export { encodeMessage, decodeMessage, ProtocolError } from './protocol-io';
 export type {
   FileMeta,
   TransferProgress,

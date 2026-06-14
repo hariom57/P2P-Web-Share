@@ -10,6 +10,8 @@ import {
   type VerifyResponseMessage,
   type ErrorMessage,
   type CancelMessage,
+  type ResumeMessage,
+  type ResumeAckMessage,
   type DataChannelMessage,
 } from './protocol.js';
 
@@ -32,6 +34,10 @@ export function encodeMessage(msg: DataChannelMessage): ArrayBuffer {
       return encodeError(msg);
     case MessageType.CANCEL:
       return encodeCancel(msg);
+    case MessageType.RESUME:
+      return encodeResume(msg);
+    case MessageType.RESUME_ACK:
+      return encodeResumeAck(msg);
   }
 }
 
@@ -67,6 +73,10 @@ export function decodeMessage(buffer: ArrayBuffer): DataChannelMessage {
       return decodeError(payload);
     case MessageType.CANCEL:
       return decodeCancel(payload);
+    case MessageType.RESUME:
+      return decodeResume(payload);
+    case MessageType.RESUME_ACK:
+      return decodeResumeAck(payload);
     default:
       throw new ProtocolError(`Unknown message type: ${type}`);
   }
@@ -297,6 +307,46 @@ function decodeCancel(payload: Uint8Array): CancelMessage {
   const message = TEXT_DECODER.decode(payload.slice(4, 4 + msgLen));
 
   return { type: MessageType.CANCEL, reason, message };
+}
+
+function encodeResume(msg: ResumeMessage): ArrayBuffer {
+  const totalSize = 5 + 4;
+  const buf = new ArrayBuffer(totalSize);
+  const view = new DataView(buf);
+
+  view.setUint8(0, MessageType.RESUME);
+  view.setUint32(1, 4, false);
+  view.setUint32(5, msg.lastAcknowledgedChunk, false);
+
+  return buf;
+}
+
+function decodeResume(payload: Uint8Array): ResumeMessage {
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  return {
+    type: MessageType.RESUME,
+    lastAcknowledgedChunk: view.getUint32(0, false),
+  };
+}
+
+function encodeResumeAck(msg: ResumeAckMessage): ArrayBuffer {
+  const totalSize = 5 + 4;
+  const buf = new ArrayBuffer(totalSize);
+  const view = new DataView(buf);
+
+  view.setUint8(0, MessageType.RESUME_ACK);
+  view.setUint32(1, 4, false);
+  view.setUint32(5, msg.lastReceivedChunk, false);
+
+  return buf;
+}
+
+function decodeResumeAck(payload: Uint8Array): ResumeAckMessage {
+  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  return {
+    type: MessageType.RESUME_ACK,
+    lastReceivedChunk: view.getUint32(0, false),
+  };
 }
 
 export class ProtocolError extends Error {

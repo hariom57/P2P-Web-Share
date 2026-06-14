@@ -5,6 +5,9 @@ import {
   deleteCheckpoint,
   getAllCheckpoints,
   clearAllCheckpoints,
+  saveChunk,
+  loadAllChunks,
+  deleteRoomChunks,
 } from '../services/checkpoint-store';
 
 const TEST_ROOM = 'test-room-id';
@@ -102,5 +105,50 @@ describe('checkpoint-store (IndexedDB)', () => {
 
     const all = await getAllCheckpoints();
     expect(all.length).toBeGreaterThanOrEqual(2);
+  });
+
+  describe('chunk persistence', () => {
+    it('should save and load a single chunk', async () => {
+      const data = new Uint8Array([0x01, 0x02, 0x03]);
+      await saveChunk(TEST_ROOM, 0, data);
+
+      const map = await loadAllChunks(TEST_ROOM);
+      expect(map.size).toBe(1);
+      const loaded = map.get(0);
+      expect(Array.from(loaded!)).toEqual(Array.from(data));
+    });
+
+    it('should save and load multiple chunks', async () => {
+      await saveChunk(TEST_ROOM, 0, new Uint8Array([0xAA]));
+      await saveChunk(TEST_ROOM, 1, new Uint8Array([0xBB]));
+      await saveChunk(TEST_ROOM, 5, new Uint8Array([0xCC]));
+
+      const map = await loadAllChunks(TEST_ROOM);
+      expect(map.size).toBe(3);
+      expect(Array.from(map.get(0)!)).toEqual([0xAA]);
+      expect(Array.from(map.get(1)!)).toEqual([0xBB]);
+      expect(Array.from(map.get(5)!)).toEqual([0xCC]);
+    });
+
+    it('should delete all chunks for a room', async () => {
+      await saveChunk(TEST_ROOM, 0, new Uint8Array([0x01]));
+      await saveChunk(TEST_ROOM, 1, new Uint8Array([0x02]));
+      await deleteRoomChunks(TEST_ROOM);
+
+      const map = await loadAllChunks(TEST_ROOM);
+      expect(map.size).toBe(0);
+    });
+
+    it('should not affect chunks from other rooms', async () => {
+      const otherRoom = 'other-room';
+      await saveChunk(TEST_ROOM, 0, new Uint8Array([0x01]));
+      await saveChunk(otherRoom, 0, new Uint8Array([0xFF]));
+
+      await deleteRoomChunks(TEST_ROOM);
+
+      const otherMap = await loadAllChunks(otherRoom);
+      expect(otherMap.size).toBe(1);
+      expect(Array.from(otherMap.get(0)!)).toEqual([0xFF]);
+    });
   });
 });

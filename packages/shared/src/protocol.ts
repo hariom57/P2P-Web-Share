@@ -6,6 +6,8 @@ export enum MessageType {
   VERIFY_RESPONSE = 0x04,
   ERROR = 0x05,
   CANCEL = 0x06,
+  RESUME = 0x07,
+  RESUME_ACK = 0x08,
 }
 
 export enum ChunkAckStatus {
@@ -74,6 +76,16 @@ export interface CancelMessage {
   message: string;
 }
 
+export interface ResumeMessage {
+  type: MessageType.RESUME;
+  lastAcknowledgedChunk: number;
+}
+
+export interface ResumeAckMessage {
+  type: MessageType.RESUME_ACK;
+  lastReceivedChunk: number;
+}
+
 export type DataChannelMessage =
   | FileMetaMessage
   | ChunkMessage
@@ -81,7 +93,9 @@ export type DataChannelMessage =
   | VerifyRequestMessage
   | VerifyResponseMessage
   | ErrorMessage
-  | CancelMessage;
+  | CancelMessage
+  | ResumeMessage
+  | ResumeAckMessage;
 
 export const PROTOCOL_CONSTANTS = {
   ENVELOPE_HEADER_SIZE: 5,

@@ -7,7 +7,7 @@ import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../servi
 import { reassembleFile, triggerDownload } from '../services/file-download';
 import { encryptChunk, decryptChunk } from '../services/encryption';
 import { getEncryptionKey } from '../services/data-channel-registry';
-import { saveCheckpoint, deleteCheckpoint, getCheckpoint } from '../services/checkpoint-store';
+import { saveCheckpoint, deleteCheckpoint, getCheckpoint, saveChunk, loadAllChunks, deleteRoomChunks } from '../services/checkpoint-store';
 import { useTransferStore } from '../stores/transferStore';
 import { useUIStore } from '../stores/uiStore';
 
@@ -26,8 +26,9 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
   const windowSizeRef = useRef(PROTOCOL_CONSTANTS.MIN_WINDOW_SIZE);
   const cancelledRef = useRef(false);
   const sendResolveRef = useRef<((value: boolean) => void) | null>(null);
+  const resumeResolveRef = useRef<((value: number) => void) | null>(null);
   const fileMetaRef = useRef<FileMetaMessage | null>(null);
-  const lastSaveRef = useRef(0);
+  const chunkCountRef = useRef(0);
   const roomIdRef = useRef('');
 
   const transferStore = useTransferStore();
@@ -138,18 +139,34 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     if (roomId) {
       const cp = await getCheckpoint(roomId);
       if (cp && cp.lastAcknowledgedChunk > 0) {
-        chunker.seek(cp.lastAcknowledgedChunk + 1);
-        const skippedBytes = (cp.lastAcknowledgedChunk + 1) * chunkSize;
-        transferStore.setProgress({
-          chunksSent: cp.lastAcknowledgedChunk + 1,
-          chunksAcknowledged: cp.lastAcknowledgedChunk + 1,
-          bytesTransferred: skippedBytes,
+        dataChannel.send(encodeMessage({
+          type: MessageType.RESUME,
           lastAcknowledgedChunk: cp.lastAcknowledgedChunk,
+        }));
+
+        const theirLastReceived = await new Promise<number>((resolve) => {
+          resumeResolveRef.current = resolve;
+          setTimeout(() => resolve(-1), 5000);
         });
-        inFlightRef.current.clear();
+
+        if (theirLastReceived >= 0) {
+          const resumePoint = Math.min(cp.lastAcknowledgedChunk, theirLastReceived);
+          if (resumePoint > 0) {
+            chunker.seek(resumePoint + 1);
+            const skippedBytes = (resumePoint + 1) * chunkSize;
+            transferStore.setProgress({
+              chunksSent: resumePoint + 1,
+              chunksAcknowledged: cp.lastAcknowledgedChunk,
+              bytesTransferred: skippedBytes,
+              lastAcknowledgedChunk: cp.lastAcknowledgedChunk,
+            });
+            inFlightRef.current.clear();
+          }
+        }
       }
     }
 
+    chunkCountRef.current = 0;
     while (!cancelledRef.current) {
       const chunk = await chunker.readNextChunk();
       if (!chunk) break;
@@ -231,6 +248,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     setIsTransferring(false);
     if (roomIdRef.current) {
       deleteCheckpoint(roomIdRef.current);
+      deleteRoomChunks(roomIdRef.current);
     }
   }, [dataChannel, transferStore, addNotification, sendMessage, waitForBufferedAmountLow]);
 
@@ -252,6 +270,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     setIsTransferring(false);
     if (roomIdRef.current) {
       deleteCheckpoint(roomIdRef.current);
+      deleteRoomChunks(roomIdRef.current);
     }
   }, [dataChannel, transferStore]);
 
@@ -278,6 +297,26 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         case MessageType.FILE_META: {
           fileMetaRef.current = msg;
           setReceivedFileMeta(msg);
+          if (roomIdRef.current) {
+            const cp = await getCheckpoint(roomIdRef.current);
+            if (cp && cp.lastReceivedChunk > 0) {
+              const stored = await loadAllChunks(roomIdRef.current);
+              for (const [seq, data] of stored) {
+                receivedChunks.set(seq, data);
+              }
+              const ackedChunks = cp.lastReceivedChunk + 1;
+              transferStore.setProgress({
+                chunksReceived: ackedChunks,
+                lastAcknowledgedChunk: cp.lastReceivedChunk,
+              });
+              transferStore.setFileMetadata({
+                fileName: msg.fileName,
+                fileSize: Number(msg.fileSize),
+                fileType: msg.mimeType,
+              });
+              chunkCountRef.current = ackedChunks;
+            }
+          }
           dataChannel.send(encodeMessage({
             type: MessageType.CHUNK_ACK,
             sequence: 0,
@@ -286,8 +325,56 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
           break;
         }
 
+        case MessageType.RESUME: {
+          const rid = roomIdRef.current;
+          if (rid) {
+            const cp = await getCheckpoint(rid);
+            const lastReceived = cp ? cp.lastReceivedChunk : 0;
+            if (lastReceived > 0) {
+              const stored = await loadAllChunks(rid);
+              for (const [seq, data] of stored) {
+                receivedChunks.set(seq, data);
+              }
+              chunkCountRef.current = lastReceived + 1;
+              transferStore.setProgress({
+                chunksReceived: lastReceived + 1,
+                lastAcknowledgedChunk: lastReceived,
+              });
+            }
+            dataChannel.send(encodeMessage({
+              type: MessageType.RESUME_ACK,
+              lastReceivedChunk: lastReceived,
+            }));
+          } else {
+            dataChannel.send(encodeMessage({
+              type: MessageType.RESUME_ACK,
+              lastReceivedChunk: 0,
+            }));
+          }
+          break;
+        }
+
         case MessageType.CHUNK: {
           receivedChunks.set(msg.sequence, msg.data);
+          transferStore.incrementChunksReceived();
+          chunkCountRef.current++;
+          if (roomIdRef.current) {
+            saveChunk(roomIdRef.current, msg.sequence, msg.data);
+            if (chunkCountRef.current % 10 === 0) {
+              const meta = fileMetaRef.current;
+              saveCheckpoint(roomIdRef.current, {
+                role: 'receiver',
+                fileName: meta?.fileName || '',
+                fileSize: Number(meta?.fileSize || BigInt(0)),
+                totalChunks: meta?.totalChunks || 0,
+                lastSentChunk: 0,
+                lastReceivedChunk: msg.sequence,
+                lastAcknowledgedChunk: 0,
+                totalBytesSent: 0,
+                timestamp: Date.now(),
+              });
+            }
+          }
           dataChannel.send(encodeMessage({
             type: MessageType.CHUNK_ACK,
             sequence: msg.sequence,
@@ -303,6 +390,14 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
           if (sendResolveRef.current && msg.sequence === 0) {
             sendResolveRef.current(true);
             sendResolveRef.current = null;
+          }
+          break;
+        }
+
+        case MessageType.RESUME_ACK: {
+          if (resumeResolveRef.current) {
+            resumeResolveRef.current(msg.lastReceivedChunk);
+            resumeResolveRef.current = null;
           }
           break;
         }
@@ -345,6 +440,10 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
             type: MessageType.VERIFY_RESPONSE,
             match,
           }));
+          if (roomIdRef.current) {
+            deleteRoomChunks(roomIdRef.current);
+            deleteCheckpoint(roomIdRef.current);
+          }
           break;
         }
 
@@ -359,6 +458,10 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         case MessageType.CANCEL: {
           transferStore.setTransferPhase('cancelled');
           setIsTransferring(false);
+          if (roomIdRef.current) {
+            deleteRoomChunks(roomIdRef.current);
+            deleteCheckpoint(roomIdRef.current);
+          }
           break;
         }
 
@@ -367,6 +470,10 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
           transferStore.setTransferError(msg.message);
           transferStore.setTransferPhase('error');
           setIsTransferring(false);
+          if (roomIdRef.current) {
+            deleteRoomChunks(roomIdRef.current);
+            deleteCheckpoint(roomIdRef.current);
+          }
           break;
         }
       }
@@ -376,7 +483,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     return () => {
       dataChannel.removeEventListener('message', handleMessage);
     };
-  }, [dataChannel, transferStore]);
+  }, [dataChannel, transferStore, addNotification]);
 
   return {
     sendFile,

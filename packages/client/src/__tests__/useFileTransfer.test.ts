@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { useFileTransfer } from '../hooks/useFileTransfer';
 import { useTransferStore } from '../stores/transferStore';
-import { encodeMessage } from '@p2p-share/shared';
+import { encodeMessage, decodeMessage } from '@p2p-share/shared';
 import { MessageType } from '@p2p-share/shared';
 import type { DataChannelMessage } from '@p2p-share/shared';
+import { saveCheckpoint, clearAllCheckpoints } from '../services/checkpoint-store';
 
 function createMockDataChannel(): RTCDataChannel & { __triggerMessage: (data: ArrayBuffer) => void } {
   const listeners = new Map<string, Set<EventListener>>();
@@ -80,6 +81,76 @@ describe('useFileTransfer', () => {
     });
     expect(result.current.receivedFileMeta?.fileName).toBe('test.txt');
     expect(dataChannel.send).toHaveBeenCalled();
+  });
+
+  it('should handle RESUME message and send RESUME_ACK', async () => {
+    await clearAllCheckpoints();
+    const roomId = 'test-resume-room';
+    await saveCheckpoint(roomId, {
+      role: 'receiver',
+      fileName: 'test.bin',
+      fileSize: 200,
+      totalChunks: 4,
+      lastSentChunk: 0,
+      lastReceivedChunk: 2,
+      lastAcknowledgedChunk: 0,
+      totalBytesSent: 0,
+      timestamp: Date.now(),
+    });
+
+    const { result } = renderHook(() => useFileTransfer({ dataChannel, roomId }));
+
+    const resumeMsg: DataChannelMessage = {
+      type: MessageType.RESUME,
+      lastAcknowledgedChunk: 3,
+    };
+
+    act(() => {
+      dataChannel.__triggerMessage(encodeMessage(resumeMsg));
+    });
+
+    await waitFor(() => {
+      const lastCall = (dataChannel.send as ReturnType<typeof vi.fn>).mock.lastCall;
+      if (lastCall) {
+        const sent = lastCall[0] as ArrayBuffer;
+        const decoded = decodeMessage(sent);
+        expect(decoded.type).toBe(MessageType.RESUME_ACK);
+        if (decoded.type === MessageType.RESUME_ACK) {
+          expect(decoded.lastReceivedChunk).toBe(2);
+        }
+      } else {
+        throw new Error('No message was sent');
+      }
+    });
+  });
+
+  it('should handle RESUME message with no checkpoint', async () => {
+    await clearAllCheckpoints();
+
+    const { result } = renderHook(() => useFileTransfer({ dataChannel, roomId: 'fresh-room' }));
+
+    const resumeMsg: DataChannelMessage = {
+      type: MessageType.RESUME,
+      lastAcknowledgedChunk: 5,
+    };
+
+    act(() => {
+      dataChannel.__triggerMessage(encodeMessage(resumeMsg));
+    });
+
+    await waitFor(() => {
+      const lastCall = (dataChannel.send as ReturnType<typeof vi.fn>).mock.lastCall;
+      if (lastCall) {
+        const sent = lastCall[0] as ArrayBuffer;
+        const decoded = decodeMessage(sent);
+        expect(decoded.type).toBe(MessageType.RESUME_ACK);
+        if (decoded.type === MessageType.RESUME_ACK) {
+          expect(decoded.lastReceivedChunk).toBe(0);
+        }
+      } else {
+        throw new Error('No message was sent');
+      }
+    });
   });
 
   it('should handle incoming ERROR message', async () => {

@@ -213,6 +213,55 @@ describe('Protocol I/O', () => {
     });
   });
 
+  describe('RESUME', () => {
+    it('should round-trip a resume message', () => {
+      const original = {
+        type: MessageType.RESUME as const,
+        lastAcknowledgedChunk: 42,
+      };
+
+      const encoded = encodeMessage(original);
+      const decoded = decodeMessage(encoded);
+
+      expect(decoded.type).toBe(MessageType.RESUME);
+      if (decoded.type === MessageType.RESUME) {
+        expect(decoded.lastAcknowledgedChunk).toBe(42);
+      }
+    });
+
+    it('should round-trip zero chunk resume', () => {
+      const original = {
+        type: MessageType.RESUME as const,
+        lastAcknowledgedChunk: 0,
+      };
+
+      const encoded = encodeMessage(original);
+      const decoded = decodeMessage(encoded);
+
+      expect(decoded.type).toBe(MessageType.RESUME);
+      if (decoded.type === MessageType.RESUME) {
+        expect(decoded.lastAcknowledgedChunk).toBe(0);
+      }
+    });
+  });
+
+  describe('RESUME_ACK', () => {
+    it('should round-trip a resume ack with last received chunk', () => {
+      const original = {
+        type: MessageType.RESUME_ACK as const,
+        lastReceivedChunk: 37,
+      };
+
+      const encoded = encodeMessage(original);
+      const decoded = decodeMessage(encoded);
+
+      expect(decoded.type).toBe(MessageType.RESUME_ACK);
+      if (decoded.type === MessageType.RESUME_ACK) {
+        expect(decoded.lastReceivedChunk).toBe(37);
+      }
+    });
+  });
+
   describe('protocol errors', () => {
     it('should reject messages shorter than 5 bytes', () => {
       const buf = new ArrayBuffer(3);
