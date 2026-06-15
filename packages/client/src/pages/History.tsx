@@ -48,7 +48,7 @@ function History() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white p-4">
+    <div className="text-white min-h-screen p-4">
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">

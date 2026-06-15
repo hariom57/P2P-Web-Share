@@ -146,7 +146,7 @@ function Transfer() {
 
   if (!dataChannel) {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4">
+      <div className="text-white flex flex-col items-center justify-center min-h-screen p-4">
         <p className="text-gray-400">Connection lost. Please restart.</p>
         <button className="mt-4 text-blue-400 underline" onClick={() => navigate('/')}>
           Go Home
@@ -192,7 +192,7 @@ function Transfer() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4">
+    <div className="text-white flex flex-col items-center justify-center min-h-screen p-4">
       <div className="text-center max-w-lg w-full">
         <h2 className="text-2xl font-bold mb-2">{isSender ? 'Sending' : 'Receiving'}</h2>
         {totalFiles > 1 && (

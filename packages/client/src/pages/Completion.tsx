@@ -42,7 +42,7 @@ function Completion() {
   const canPreview = previewUrl && isPreviewable(fileType);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center p-4">
+    <div className="text-white flex flex-col items-center min-h-screen p-4">
       <div className="text-center max-w-lg w-full">
         {phase === 'complete' && (
           <>

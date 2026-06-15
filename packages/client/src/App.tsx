@@ -4,6 +4,7 @@ import Room from './pages/Room';
 import Transfer from './pages/Transfer';
 import Completion from './pages/Completion';
 import History from './pages/History';
+import NeonCursor from './components/NeonCursor';
 import { useSocket } from './hooks/useSocket';
 
 function AppContent() {
@@ -23,7 +24,12 @@ function AppContent() {
 function App() {
   return (
     <BrowserRouter>
-      <AppContent />
+      <div className="relative min-h-screen">
+        <NeonCursor />
+        <div className="relative z-10 min-h-screen bg-gray-950/85 backdrop-blur-[1px]">
+          <AppContent />
+        </div>
+      </div>
     </BrowserRouter>
   );
 }

@@ -148,7 +148,7 @@ function Landing() {
   }, [isCreating, selectedFiles, navigate]);
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4">
+    <div className="text-white flex flex-col items-center justify-center min-h-screen p-4">
       <div className="text-center max-w-lg w-full">
         <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-purple-500 to-blue-400 bg-clip-text text-transparent animate-gradient-shift">
           P2P Web Share

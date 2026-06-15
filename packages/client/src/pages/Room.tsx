@@ -229,14 +229,14 @@ function Room() {
 
   if (roomPhase === 'connecting') {
     return (
-      <div className="min-h-screen bg-gray-950 text-white flex items-center justify-center">
+      <div className="text-white flex items-center justify-center min-h-screen">
         Connecting...
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4">
+    <div className="text-white flex flex-col items-center justify-center min-h-screen p-4">
       <div className="text-center max-w-lg w-full">
         <h2 className="text-2xl font-bold mb-2 animate-slide-up">Share Link</h2>
         <p
