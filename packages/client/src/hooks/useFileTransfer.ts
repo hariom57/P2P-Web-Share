@@ -120,6 +120,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
       totalChunks,
       chunkSize,
     };
+    fileMetaRef.current = metaMsg;
 
     dataChannel!.send(encodeMessage(metaMsg));
 
