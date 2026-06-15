@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { FileChunker, calculateTotalChunks } from '../services/file-chunker';
+import { FileChunker, calculateTotalChunks } from '../services/file-chunker.js';
 
 function createMockFile(name: string, size: number, type = 'application/octet-stream'): File {
   const buffer = new ArrayBuffer(size);

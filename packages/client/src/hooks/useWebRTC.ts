@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getSocket } from '../services/socket';
-import { useConnectionStore } from '../stores/connectionStore';
-import { useRoomStore } from '../stores/roomStore';
+import { getSocket } from '../services/socket.js';
+import { useConnectionStore } from '../stores/connectionStore.js';
+import { useRoomStore } from '../stores/roomStore.js';
 
 const ICE_SERVERS: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],

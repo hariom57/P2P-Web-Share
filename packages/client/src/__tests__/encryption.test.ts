@@ -5,7 +5,7 @@ import {
   decryptChunk,
   exportKey,
   importKey,
-} from '../services/encryption';
+} from '../services/encryption.js';
 
 describe('encryption (AES-GCM 256)', () => {
   it('should generate a CryptoKey', async () => {

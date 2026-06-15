@@ -7,11 +7,11 @@ import type {
   BatchMetaMessage,
   BatchEndMessage,
 } from '@p2p-share/shared';
-import { FileChunker } from '../services/file-chunker';
-import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../services/sha256';
-import { reassembleFile, triggerDownload } from '../services/file-download';
-import { encryptChunk, decryptChunk } from '../services/encryption';
-import { getEncryptionKey } from '../services/data-channel-registry';
+import { FileChunker } from '../services/file-chunker.js';
+import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../services/sha256.js';
+import { reassembleFile, triggerDownload } from '../services/file-download.js';
+import { encryptChunk, decryptChunk } from '../services/encryption.js';
+import { getEncryptionKey } from '../services/data-channel-registry.js';
 import {
   saveCheckpoint,
   deleteCheckpoint,
@@ -19,11 +19,11 @@ import {
   saveChunk,
   loadAllChunks,
   deleteRoomChunks,
-} from '../services/checkpoint-store';
-import { useTransferStore } from '../stores/transferStore';
-import { useUIStore } from '../stores/uiStore';
-import { useHistoryStore } from '../stores/historyStore';
-import { saveHistoryEntry } from '../services/history-store';
+} from '../services/checkpoint-store.js';
+import { useTransferStore } from '../stores/transferStore.js';
+import { useUIStore } from '../stores/uiStore.js';
+import { useHistoryStore } from '../stores/historyStore.js';
+import { saveHistoryEntry } from '../services/history-store.js';
 
 interface UseFileTransferOptions {
   dataChannel: RTCDataChannel | null;

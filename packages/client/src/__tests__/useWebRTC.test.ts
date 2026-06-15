@@ -78,7 +78,7 @@ describe('useWebRTC', () => {
 
     vi.spyOn(globalThis, 'RTCPeerConnection').mockImplementation(() => mockPC as unknown as RTCPeerConnection);
     const mockSocket = { emit: emitFn, on: vi.fn(), off: vi.fn() };
-    vi.spyOn(await import('../services/socket'), 'getSocket').mockReturnValue(mockSocket as never);
+    vi.spyOn(await import('../services/socket.js'), 'getSocket').mockReturnValue(mockSocket as never);
 
     const roomId = 'abc123';
     const pc = new RTCPeerConnection();

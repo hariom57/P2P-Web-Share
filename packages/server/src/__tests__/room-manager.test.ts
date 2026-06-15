@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { RoomManager, RoomError } from '../services/room-manager';
+import { RoomManager, RoomError } from '../services/room-manager.js';
 
 describe('RoomManager', () => {
   let manager: RoomManager;

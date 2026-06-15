@@ -6,7 +6,7 @@ import express from 'express';
 import { Server } from 'socket.io';
 import Client from 'socket.io-client';
 type ClientSocket = ReturnType<typeof Client>;
-import { RoomManager } from '../services/room-manager';
+import { RoomManager } from '../services/room-manager.js';
 
 function createServerPair(): Promise<{ server: HttpServer; io: Server; port: number }> {
   return new Promise((resolve) => {

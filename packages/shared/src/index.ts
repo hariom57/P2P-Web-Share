@@ -1,4 +1,4 @@
-export type { RoomEventMap, ClientEventMap, ServerEventMap } from './events';
+export type { RoomEventMap, ClientEventMap, ServerEventMap } from './events.js';
 export type {
   RoomCreatedPayload,
   RoomJoinedPayload,
@@ -12,7 +12,7 @@ export type {
   FileMetadataPayload,
   TransferCompletePayload,
   TransferErrorPayload,
-} from './events';
+} from './events.js';
 export type {
   DataChannelMessage,
   FileMetaMessage,
@@ -27,21 +27,21 @@ export type {
   BatchMetaMessage,
   BatchEndMessage,
   BatchMetaFileEntry,
-} from './protocol';
+} from './protocol.js';
 export {
   MessageType,
   ChunkAckStatus,
   ErrorCode,
   CancelReason,
   PROTOCOL_CONSTANTS,
-} from './protocol';
-export { encodeMessage, decodeMessage, ProtocolError } from './protocol-io';
+} from './protocol.js';
+export { encodeMessage, decodeMessage, ProtocolError } from './protocol-io.js';
 export type {
   FileMeta,
   TransferProgress,
   PeerInfo,
   RoomInfo,
-} from './types';
+} from './types.js';
 export {
   ROOM_ID_LENGTH,
   ROOM_TTL_MS,
@@ -49,5 +49,5 @@ export {
   DEFAULT_CHUNK_SIZE,
   MAX_FILE_SIZE_MVP,
   MAX_PEERS_PER_ROOM,
-} from './constants';
-export { formatFileSize } from './constants';
+} from './constants.js';
+export { formatFileSize } from './constants.js';

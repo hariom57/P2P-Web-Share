@@ -1,11 +1,11 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Landing from './pages/Landing';
-import Room from './pages/Room';
-import Transfer from './pages/Transfer';
-import Completion from './pages/Completion';
-import History from './pages/History';
-import NeonCursor from './components/NeonCursor';
-import { useSocket } from './hooks/useSocket';
+import Landing from './pages/Landing.js';
+import Room from './pages/Room.js';
+import Transfer from './pages/Transfer.js';
+import Completion from './pages/Completion.js';
+import History from './pages/History.js';
+import NeonCursor from './components/NeonCursor.js';
+import { useSocket } from './hooks/useSocket.js';
 
 function AppContent() {
   useSocket();

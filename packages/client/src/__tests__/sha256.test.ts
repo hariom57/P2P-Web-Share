@@ -5,7 +5,7 @@ import {
   bytesToHex,
   hexToBytes,
   areHashesEqual,
-} from '../services/sha256';
+} from '../services/sha256.js';
 
 describe('sha256', () => {
   describe('computeSHA256', () => {

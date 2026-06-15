@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { formatFileSize } from '@p2p-share/shared';
-import { connectSocket } from '../services/socket';
-import { useRoomStore } from '../stores/roomStore';
-import { setActiveFile, setActiveFiles, setEncryptionKey } from '../services/data-channel-registry';
-import { generateEncryptionKey, exportKey } from '../services/encryption';
+import { connectSocket } from '../services/socket.js';
+import { useRoomStore } from '../stores/roomStore.js';
+import { setActiveFile, setActiveFiles, setEncryptionKey } from '../services/data-channel-registry.js';
+import { generateEncryptionKey, exportKey } from '../services/encryption.js';
 
 function Landing() {
   const navigate = useNavigate();

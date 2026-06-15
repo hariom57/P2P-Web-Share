@@ -1,8 +1,8 @@
 import { useEffect, useCallback } from 'react';
-import { connectSocket, disconnectSocket } from '../services/socket';
-import { useConnectionStore } from '../stores/connectionStore';
-import { useTransferStore } from '../stores/transferStore';
-import { useRoomStore } from '../stores/roomStore';
+import { connectSocket, disconnectSocket } from '../services/socket.js';
+import { useConnectionStore } from '../stores/connectionStore.js';
+import { useTransferStore } from '../stores/transferStore.js';
+import { useRoomStore } from '../stores/roomStore.js';
 
 // This hook handles only socket events that are NOT managed by Room.tsx.
 // Room.tsx owns: room-joined, peer-joined, room-error, room-expired, room-created

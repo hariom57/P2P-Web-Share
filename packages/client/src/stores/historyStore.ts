@@ -1,13 +1,13 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { HistoryEntry } from '../services/history-store';
+import type { HistoryEntry } from '../services/history-store.js';
 import {
   getAllHistoryEntries,
   saveHistoryEntry,
   deleteHistoryEntry,
   clearAllHistory,
-} from '../services/history-store';
-import { deleteCheckpoint, deleteRoomChunks } from '../services/checkpoint-store';
+} from '../services/history-store.js';
+import { deleteCheckpoint, deleteRoomChunks } from '../services/checkpoint-store.js';
 
 export type RoleFilter = 'all' | 'sender' | 'receiver';
 export type StatusFilter = 'all' | 'completed' | 'error' | 'cancelled' | 'interrupted';

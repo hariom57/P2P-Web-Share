@@ -10,7 +10,7 @@ import {
   deleteRoomChunks,
   cleanupStaleCheckpoints,
   isCheckpointStale,
-} from '../services/checkpoint-store';
+} from '../services/checkpoint-store.js';
 
 const TEST_ROOM = 'test-room-id';
 

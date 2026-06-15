@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { formatFileSize } from '@p2p-share/shared';
-import { useFileTransfer } from '../hooks/useFileTransfer';
-import { useTransferStore } from '../stores/transferStore';
-import { useResumeStore } from '../stores/resumeStore';
+import { useFileTransfer } from '../hooks/useFileTransfer.js';
+import { useTransferStore } from '../stores/transferStore.js';
+import { useResumeStore } from '../stores/resumeStore.js';
 import {
   getActiveDataChannel,
   getActiveFiles,
@@ -11,7 +11,7 @@ import {
   setActiveFile,
   getResumeAfterConnect,
   setResumeAfterConnect,
-} from '../services/data-channel-registry';
+} from '../services/data-channel-registry.js';
 
 function Transfer() {
   const { roomId } = useParams<{ roomId: string }>();

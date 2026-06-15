@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useRoomStore } from '../stores/roomStore';
-import { useConnectionStore } from '../stores/connectionStore';
-import { useTransferStore } from '../stores/transferStore';
-import { useUIStore } from '../stores/uiStore';
-import { useResumeStore } from '../stores/resumeStore';
-import { useHistoryStore } from '../stores/historyStore';
+import { useRoomStore } from '../stores/roomStore.js';
+import { useConnectionStore } from '../stores/connectionStore.js';
+import { useTransferStore } from '../stores/transferStore.js';
+import { useUIStore } from '../stores/uiStore.js';
+import { useResumeStore } from '../stores/resumeStore.js';
+import { useHistoryStore } from '../stores/historyStore.js';
 
 describe('roomStore', () => {
   beforeEach(() => {

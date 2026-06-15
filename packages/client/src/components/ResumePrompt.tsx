@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
-import { useResumeStore } from '../stores/resumeStore';
-import { deleteCheckpoint, deleteRoomChunks } from '../services/checkpoint-store';
-import { setActiveFile } from '../services/data-channel-registry';
+import { useResumeStore } from '../stores/resumeStore.js';
+import { deleteCheckpoint, deleteRoomChunks } from '../services/checkpoint-store.js';
+import { setActiveFile } from '../services/data-channel-registry.js';
 
 interface ResumePromptProps {
   roomId: string;

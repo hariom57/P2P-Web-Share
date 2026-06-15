@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { reassembleFile, triggerDownload, openFileInNewTab } from '../services/file-download';
+import { reassembleFile, triggerDownload, openFileInNewTab } from '../services/file-download.js';
 
 beforeAll(() => {
   URL.createObjectURL = vi.fn(() => 'blob:http://localhost/test');

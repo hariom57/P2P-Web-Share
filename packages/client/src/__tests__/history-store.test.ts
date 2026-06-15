@@ -6,7 +6,7 @@ import {
   deleteHistoryEntry,
   clearAllHistory,
   type HistoryEntry,
-} from '../services/history-store';
+} from '../services/history-store.js';
 
 const TEST_ROOM = 'test-history-room';
 

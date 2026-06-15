@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { encodeMessage, decodeMessage } from '../protocol-io';
-import { MessageType, ChunkAckStatus, ErrorCode, CancelReason } from '../protocol';
+import { encodeMessage, decodeMessage } from '../protocol-io.js';
+import { MessageType, ChunkAckStatus, ErrorCode, CancelReason } from '../protocol.js';
 
 describe('Protocol I/O', () => {
   describe('FILE_META', () => {

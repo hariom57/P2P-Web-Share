@@ -1,8 +1,8 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { connectSocket } from '../services/socket';
-import { useRoomStore } from '../stores/roomStore';
-import { useWebRTC } from '../hooks/useWebRTC';
+import { connectSocket } from '../services/socket.js';
+import { useRoomStore } from '../stores/roomStore.js';
+import { useWebRTC } from '../hooks/useWebRTC.js';
 import {
   setActiveDataChannel,
   getActiveDataChannel,
@@ -10,12 +10,12 @@ import {
   setResumeAfterConnect,
   getResumeAfterConnect,
   getActiveFile,
-} from '../services/data-channel-registry';
-import { importKey } from '../services/encryption';
-import { getCheckpoint, deleteRoomChunks } from '../services/checkpoint-store';
-import { useResumeStore } from '../stores/resumeStore';
-import ResumePrompt from '../components/ResumePrompt';
-import QRCode from '../components/QRCode';
+} from '../services/data-channel-registry.js';
+import { importKey } from '../services/encryption.js';
+import { getCheckpoint, deleteRoomChunks } from '../services/checkpoint-store.js';
+import { useResumeStore } from '../stores/resumeStore.js';
+import ResumePrompt from '../components/ResumePrompt.js';
+import QRCode from '../components/QRCode.js';
 
 function keyFingerprint(hash: string): string | null {
   const match = hash.match(/key=([A-Za-z0-9+/=]+)/);

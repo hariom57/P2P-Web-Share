@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useHistoryStore, type RoleFilter, type StatusFilter } from '../stores/historyStore';
+import { useHistoryStore, type RoleFilter, type StatusFilter } from '../stores/historyStore.js';
 
 function History() {
   const navigate = useNavigate();
