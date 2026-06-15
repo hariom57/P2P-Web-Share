@@ -119,7 +119,7 @@ function History() {
         <div className="space-y-2">
           {filtered.map((entry, i) => (
             <div
-              key={entry.roomId}
+              key={entry.id}
               className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-4 flex items-center gap-4 transition-all duration-200 hover:bg-white/[0.07] hover:border-white/[0.10] animate-slide-up"
               style={{ animationDelay: `${i * 0.03}s` }}
             >
@@ -152,7 +152,7 @@ function History() {
               </div>
               <button
                 className="text-gray-600 hover:text-red-400 text-sm transition-colors shrink-0 p-2 rounded-lg hover:bg-red-500/10"
-                onClick={() => removeEntry(entry.roomId)}
+                onClick={() => removeEntry(entry.id)}
                 title="Delete entry and associated data"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

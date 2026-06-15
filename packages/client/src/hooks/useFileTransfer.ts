@@ -257,6 +257,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
       const meta = fileMetaRef.current;
       if (meta && roomIdRef.current) {
         saveHistoryEntry({
+          id: crypto.randomUUID(),
           roomId: roomIdRef.current,
           role: 'sender',
           fileName: meta.fileName,
@@ -280,6 +281,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     if (roomIdRef.current) {
       const meta = fileMetaRef.current;
       saveHistoryEntry({
+        id: crypto.randomUUID(),
         roomId: roomIdRef.current,
         role: 'sender',
         fileName: meta?.fileName || chunker.getFileName() || 'unknown',
@@ -373,6 +375,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     setIsTransferring(false);
     if (roomIdRef.current) {
       saveHistoryEntry({
+        id: crypto.randomUUID(),
         roomId: roomIdRef.current,
         role: 'sender',
         fileName: meta?.fileName || chunkerRef.current?.getFileName() || 'unknown',
@@ -654,6 +657,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
                 });
                 if (roomIdRef.current) {
                   saveHistoryEntry({
+                    id: crypto.randomUUID(),
                     roomId: roomIdRef.current,
                     role: 'receiver',
                     fileName: meta.fileName,
@@ -717,6 +721,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
           setIsTransferring(false);
           if (roomIdRef.current) {
             saveHistoryEntry({
+              id: crypto.randomUUID(),
               roomId: roomIdRef.current,
               role: 'receiver',
               fileName: meta?.fileName || 'unknown',
@@ -744,6 +749,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
           setIsTransferring(false);
           if (roomIdRef.current) {
             saveHistoryEntry({
+              id: crypto.randomUUID(),
               roomId: roomIdRef.current,
               role: 'receiver',
               fileName: errorMeta?.fileName || 'unknown',

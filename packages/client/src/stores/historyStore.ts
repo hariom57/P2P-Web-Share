@@ -20,7 +20,7 @@ export interface HistoryState {
 
   loadEntries: () => Promise<void>;
   addEntry: (entry: HistoryEntry) => Promise<void>;
-  removeEntry: (roomId: string) => Promise<void>;
+  removeEntry: (id: string) => Promise<void>;
   clearAll: () => Promise<void>;
   setFilterRole: (role: RoleFilter) => void;
   setFilterStatus: (status: StatusFilter) => void;
@@ -49,12 +49,15 @@ export const useHistoryStore = create<HistoryState>()(
         await get().loadEntries();
       },
 
-      removeEntry: async (roomId) => {
-        await deleteCheckpoint(roomId);
-        await deleteRoomChunks(roomId);
-        await deleteHistoryEntry(roomId);
+      removeEntry: async (id) => {
+        const entry = get().rawEntries.find((e) => e.id === id);
+        if (entry) {
+          await deleteCheckpoint(entry.roomId);
+          await deleteRoomChunks(entry.roomId);
+        }
+        await deleteHistoryEntry(id);
         set((state) => ({
-          rawEntries: state.rawEntries.filter((e) => e.roomId !== roomId),
+          rawEntries: state.rawEntries.filter((e) => e.id !== id),
         }));
       },
 

@@ -1,8 +1,9 @@
 const DB_NAME = 'p2p-share-history';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_NAME = 'history';
 
 export interface HistoryEntry {
+  id: string;
   roomId: string;
   role: 'sender' | 'receiver';
   fileName: string;
@@ -22,12 +23,13 @@ function openDB(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        const store = db.createObjectStore(STORE_NAME, { keyPath: 'roomId' });
-        store.createIndex('timestamp', 'startedAt', { unique: false });
-        store.createIndex('status', 'status', { unique: false });
-        store.createIndex('role', 'role', { unique: false });
+      if (db.objectStoreNames.contains(STORE_NAME)) {
+        db.deleteObjectStore(STORE_NAME);
       }
+      const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+      store.createIndex('timestamp', 'startedAt', { unique: false });
+      store.createIndex('status', 'status', { unique: false });
+      store.createIndex('role', 'role', { unique: false });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -60,11 +62,11 @@ export async function getAllHistoryEntries(): Promise<HistoryEntry[]> {
   });
 }
 
-export async function getHistoryEntry(roomId: string): Promise<HistoryEntry | null> {
+export async function getHistoryEntry(id: string): Promise<HistoryEntry | null> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
-    const request = tx.objectStore(STORE_NAME).get(roomId);
+    const request = tx.objectStore(STORE_NAME).get(id);
     request.onsuccess = () => {
       db.close();
       resolve((request.result as HistoryEntry) || null);
@@ -73,11 +75,11 @@ export async function getHistoryEntry(roomId: string): Promise<HistoryEntry | nu
   });
 }
 
-export async function deleteHistoryEntry(roomId: string): Promise<void> {
+export async function deleteHistoryEntry(id: string): Promise<void> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).delete(roomId);
+    tx.objectStore(STORE_NAME).delete(id);
     tx.oncomplete = () => { db.close(); resolve(); };
     tx.onerror = () => { db.close(); reject(tx.error); };
   });
