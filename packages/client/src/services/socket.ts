@@ -4,13 +4,22 @@ type Socket = ReturnType<typeof io>;
 
 let socket: Socket | null = null;
 
+const isDev = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+function getServerUrl(): string {
+  if (import.meta.env.VITE_SERVER_URL) return import.meta.env.VITE_SERVER_URL;
+  if (isDev) return 'http://localhost:3001';
+  return 'https://p2p-web-share-4gk6.onrender.com';
+}
+
 export function getSocket(): Socket | null {
   return socket;
 }
 
 export function connectSocket(): Socket {
   if (!socket) {
-    socket = io('http://localhost:3001', {
+    socket = io(getServerUrl(), {
       transports: ['websocket'],
       autoConnect: false,
     });
