@@ -4,6 +4,8 @@ Direct browser-to-browser file transfer. No uploads. No servers.
 
 End-to-end encrypted peer-to-peer file sharing powered by WebRTC.
 
+**Try it live:** [https://p2-p-web-share-client.vercel.app](https://p2-p-web-share-client.vercel.app)
+
 ## Features
 
 - **Peer-to-peer** — files never touch a server; WebRTC DataChannels transfer directly between browsers
