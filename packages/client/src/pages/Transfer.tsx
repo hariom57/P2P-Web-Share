@@ -4,13 +4,26 @@ import { formatFileSize } from '@p2p-share/shared';
 import { useFileTransfer } from '../hooks/useFileTransfer';
 import { useTransferStore } from '../stores/transferStore';
 import { useResumeStore } from '../stores/resumeStore';
-import { getActiveDataChannel, getActiveFiles, getActiveFile, setActiveFile, getResumeAfterConnect, setResumeAfterConnect } from '../services/data-channel-registry';
+import {
+  getActiveDataChannel,
+  getActiveFiles,
+  getActiveFile,
+  setActiveFile,
+  getResumeAfterConnect,
+  setResumeAfterConnect,
+} from '../services/data-channel-registry';
 
 function Transfer() {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const fileState = location.state as { fileName?: string; fileSize?: number; fileType?: string; files?: { fileName: string; fileSize: number; fileType: string }[]; isResuming?: boolean } | null;
+  const fileState = location.state as {
+    fileName?: string;
+    fileSize?: number;
+    fileType?: string;
+    files?: { fileName: string; fileSize: number; fileType: string }[];
+    isResuming?: boolean;
+  } | null;
   const isSender = !!(fileState?.fileName || fileState?.files?.length);
   const isResuming = fileState?.isResuming || getResumeAfterConnect();
   const [waitingForFile, setWaitingForFile] = useState(isSender && isResuming && !getActiveFile());
@@ -18,7 +31,25 @@ function Transfer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { resumeAction, clearResumableTransfer } = useResumeStore();
 
+  // FIX: track channel open state reactively instead of reading readyState on a snapshot
   const dataChannel = getActiveDataChannel();
+  const [channelOpen, setChannelOpen] = useState(() => dataChannel?.readyState === 'open');
+
+  useEffect(() => {
+    if (!dataChannel) return;
+    if (dataChannel.readyState === 'open') {
+      setChannelOpen(true);
+      return;
+    }
+    const handleOpen = () => setChannelOpen(true);
+    const handleClose = () => setChannelOpen(false);
+    dataChannel.addEventListener('open', handleOpen);
+    dataChannel.addEventListener('close', handleClose);
+    return () => {
+      dataChannel.removeEventListener('open', handleOpen);
+      dataChannel.removeEventListener('close', handleClose);
+    };
+  }, [dataChannel]);
 
   useEffect(() => {
     return () => {
@@ -54,22 +85,34 @@ function Transfer() {
   const totalFiles = fileState?.files?.length || (fileState?.fileName ? 1 : 0);
 
   useEffect(() => {
-    if (transferPhase === 'complete' || transferPhase === 'error' || transferPhase === 'cancelled') {
+    if (
+      transferPhase === 'complete' ||
+      transferPhase === 'error' ||
+      transferPhase === 'cancelled'
+    ) {
       const timer = setTimeout(() => {
-        const completedNames = batchFiles.length > 0
-          ? batchFiles.map((f) => f.name)
-          : (fileName ? [fileName] : []);
-        const completedError = transferPhase === 'error' ? useTransferStore.getState().transferError : null;
+        const completedNames =
+          batchFiles.length > 0 ? batchFiles.map((f) => f.name) : fileName ? [fileName] : [];
+        const completedError =
+          transferPhase === 'error' ? useTransferStore.getState().transferError : null;
         navigate(`/complete/${roomId}`, {
-          state: { phase: transferPhase, fileName, files: completedNames, error: completedError, previewUrl, fileType: useTransferStore.getState().fileType },
+          state: {
+            phase: transferPhase,
+            fileName,
+            files: completedNames,
+            error: completedError,
+            previewUrl,
+            fileType: useTransferStore.getState().fileType,
+          },
         });
       }, 1500);
       return () => clearTimeout(timer);
     }
   }, [transferPhase, roomId, navigate, fileName, batchFiles]);
 
+  // FIX: use channelOpen (reactive) instead of dataChannel.readyState === 'open' (snapshot)
   useEffect(() => {
-    if (isSender && dataChannel && dataChannel.readyState === 'open' && !hasStartedRef.current) {
+    if (isSender && dataChannel && channelOpen && !hasStartedRef.current) {
       const files = getActiveFiles();
       if (files && files.length > 0) {
         hasStartedRef.current = true;
@@ -86,17 +129,20 @@ function Transfer() {
         }
       }
     }
-  }, [isSender, dataChannel, sendFiles, isResuming]);
+  }, [isSender, dataChannel, channelOpen, sendFiles, isResuming]);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && dataChannel?.readyState === 'open') {
-      setActiveFile(file);
-      setWaitingForFile(false);
-      hasStartedRef.current = true;
-      sendFiles([file]);
-    }
-  }, [dataChannel, sendFiles]);
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file && channelOpen) {
+        setActiveFile(file);
+        setWaitingForFile(false);
+        hasStartedRef.current = true;
+        sendFiles([file]);
+      }
+    },
+    [channelOpen, sendFiles],
+  );
 
   if (!dataChannel) {
     return (
@@ -126,31 +172,35 @@ function Transfer() {
 
   const phaseText = () => {
     switch (transferPhase) {
-      case 'hashing': return 'Hashing file...';
-      case 'meta': return 'Exchanging metadata...';
-      case 'transferring': return 'Transferring...';
-      case 'verifying': return 'Verifying integrity...';
-      case 'complete': return 'Complete!';
-      case 'error': return 'Error';
-      case 'cancelled': return 'Cancelled';
-      default: return 'Preparing...';
+      case 'hashing':
+        return 'Hashing file...';
+      case 'meta':
+        return 'Exchanging metadata...';
+      case 'transferring':
+        return 'Transferring...';
+      case 'verifying':
+        return 'Verifying integrity...';
+      case 'complete':
+        return 'Complete!';
+      case 'error':
+        return 'Error';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return channelOpen ? 'Preparing...' : 'Waiting for connection...';
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center p-4">
       <div className="text-center max-w-lg w-full">
-        <h2 className="text-2xl font-bold mb-2">
-          {isSender ? 'Sending' : 'Receiving'}
-        </h2>
+        <h2 className="text-2xl font-bold mb-2">{isSender ? 'Sending' : 'Receiving'}</h2>
         {totalFiles > 1 && (
           <p className="text-gray-500 text-xs mb-1">
             File {currentFileIndex + 1} of {totalFiles}
           </p>
         )}
-        {fileName && (
-          <p className="text-gray-400 mb-6 text-sm">{fileName}</p>
-        )}
+        {fileName && <p className="text-gray-400 mb-6 text-sm">{fileName}</p>}
 
         <div className="bg-gray-900 rounded-lg p-6">
           <div className="flex justify-between text-sm text-gray-400 mb-2">
@@ -161,10 +211,13 @@ function Transfer() {
           <div className="w-full bg-gray-800 rounded-full h-3 mb-4 overflow-hidden">
             <div
               className={`h-3 rounded-full transition-all duration-500 ease-out ${
-                transferPhase === 'complete' ? 'bg-green-500' :
-                transferPhase === 'error' ? 'bg-red-500' :
-                transferPhase === 'cancelled' ? 'bg-gray-500' :
-                'bg-blue-600 animate-progress-stripe'
+                transferPhase === 'complete'
+                  ? 'bg-green-500'
+                  : transferPhase === 'error'
+                    ? 'bg-red-500'
+                    : transferPhase === 'cancelled'
+                      ? 'bg-gray-500'
+                      : 'bg-blue-600 animate-progress-stripe'
               }`}
               style={{ width: `${Math.min(progress, 100)}%` }}
             />
@@ -197,9 +250,7 @@ function Transfer() {
           )}
         </div>
 
-        {error && (
-          <p className="text-red-400 text-sm mt-4">{error}</p>
-        )}
+        {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
 
         {isTransferring && (
           <button
@@ -213,21 +264,14 @@ function Transfer() {
         {waitingForFile && (
           <div className="mt-6 p-6 border-2 border-dashed border-blue-500/50 rounded-xl bg-blue-500/5">
             <p className="text-blue-400 font-medium mb-2">Resume Transfer</p>
-            <p className="text-gray-400 text-sm mb-4">
-              Select the original file to resume sending
-            </p>
+            <p className="text-gray-400 text-sm mb-4">Select the original file to resume sending</p>
             <button
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
               onClick={() => fileInputRef.current?.click()}
             >
               Select File
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFileSelect}
-            />
+            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
           </div>
         )}
       </div>

@@ -60,9 +60,12 @@ io.on('connection', (socket) => {
   console.log(`[connect] socket=${socket.id}`);
 
   socket.on('create-room', () => {
+    console.log('[create-room]', socket.id, 'rooms=', [...socket.rooms]);
     try {
       const room = roomManager.createRoom();
+      console.log('[CREATE] before join', socket.id, room.id);
       roomManager.joinRoom(room.id, socket.id);
+      console.log('[CREATE] after join', socket.id, room.id);
       socket.join(room.id);
       socket.emit('room-created', {
         roomId: room.id,
@@ -79,7 +82,18 @@ io.on('connection', (socket) => {
   });
 
   socket.on('join-room', (data: { roomId: string }) => {
+    console.log('[join-room]', socket.id, data.roomId, 'rooms=', [...socket.rooms]);
     try {
+      const existingRoom = roomManager.findRoomBySocketId(socket.id);
+      console.log(
+        '[JOIN REQUEST]',
+        'socket=',
+        socket.id,
+        'target=',
+        data.roomId,
+        'existing=',
+        existingRoom?.id ?? 'none',
+      );
       const { room, peerCount } = roomManager.joinRoom(data.roomId, socket.id);
       socket.join(room.id);
       socket.emit('room-joined', {
@@ -110,7 +124,9 @@ io.on('connection', (socket) => {
       socket.to(data.roomId).emit('peer-disconnected', {
         peerId: socket.id,
       });
-      console.log(`[leave-room] socket=${socket.id} room=${data.roomId} remaining=${remainingPeers}`);
+      console.log(
+        `[leave-room] socket=${socket.id} room=${data.roomId} remaining=${remainingPeers}`,
+      );
     }
   });
 
@@ -131,20 +147,23 @@ io.on('connection', (socket) => {
     forwardToPeer(socket, 'ice-candidate', data.roomId, { candidate: data.candidate });
   });
 
-  socket.on('file-metadata', (data: { roomId: string; fileName: string; fileSize: number; fileType: string }) => {
-    if (!validateRoom(socket, data.roomId)) return;
-    roomManager.setFileMetadata(data.roomId, {
-      fileName: data.fileName,
-      fileSize: data.fileSize,
-      fileType: data.fileType,
-    });
-    forwardToPeer(socket, 'file-metadata', data.roomId, {
-      fileName: data.fileName,
-      fileSize: data.fileSize,
-      fileType: data.fileType,
-    });
-    console.log(`[file-metadata] socket=${socket.id} room=${data.roomId} file=${data.fileName}`);
-  });
+  socket.on(
+    'file-metadata',
+    (data: { roomId: string; fileName: string; fileSize: number; fileType: string }) => {
+      if (!validateRoom(socket, data.roomId)) return;
+      roomManager.setFileMetadata(data.roomId, {
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        fileType: data.fileType,
+      });
+      forwardToPeer(socket, 'file-metadata', data.roomId, {
+        fileName: data.fileName,
+        fileSize: data.fileSize,
+        fileType: data.fileType,
+      });
+      console.log(`[file-metadata] socket=${socket.id} room=${data.roomId} file=${data.fileName}`);
+    },
+  );
 
   socket.on('transfer-complete', (data: { roomId: string; sha256Hash: string }) => {
     if (!validateRoom(socket, data.roomId)) return;

@@ -4,10 +4,7 @@ import { useConnectionStore } from '../stores/connectionStore';
 import { useRoomStore } from '../stores/roomStore';
 
 const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ],
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }],
 };
 
 const DATA_CHANNEL_LABEL = 'p2p-transfer';
@@ -25,6 +22,11 @@ export function useWebRTC({ roomId, isSender, onDataChannel }: UseWebRTCOptions)
   const dcRef = useRef<RTCDataChannel | null>(null);
   const candidatesQueueRef = useRef<RTCIceCandidateInit[]>([]);
   const remoteDescSetRef = useRef(false);
+  // Keep a stable ref to onDataChannel so closures always see the latest version
+  const onDataChannelRef = useRef(onDataChannel);
+  useEffect(() => {
+    onDataChannelRef.current = onDataChannel;
+  }, [onDataChannel]);
 
   const {
     setConnectionState,
@@ -71,6 +73,22 @@ export function useWebRTC({ roomId, isSender, onDataChannel }: UseWebRTCOptions)
     }
   }, []);
 
+  const setupDataChannel = useCallback((channel: RTCDataChannel) => {
+    channel.onopen = () => {
+      setDataChannelState('open');
+      // FIX: notify only when the channel is actually open, not at creation time.
+      // This prevents premature navigation away from Room before the connection is ready.
+      if (onDataChannelRef.current) onDataChannelRef.current(channel);
+    };
+    channel.onclose = () => {
+      setDataChannelState('closed');
+    };
+    channel.onerror = (err) => {
+      console.error('[webrtc] DataChannel error:', err);
+      setError('DataChannel error');
+    };
+  }, []); // no deps - uses ref for onDataChannel
+
   const createPeerConnection = useCallback(() => {
     if (pcRef.current) return pcRef.current;
 
@@ -111,28 +129,18 @@ export function useWebRTC({ roomId, isSender, onDataChannel }: UseWebRTCOptions)
       setIceGatheringState(pc.iceGatheringState);
     };
 
+    // Receiver side: ondatachannel fires when the sender's channel is accepted.
+    // The channel is open at this point, so setupDataChannel -> onopen will fire immediately.
     pc.ondatachannel = (event) => {
       const channel = event.channel;
       dcRef.current = channel;
       setupDataChannel(channel);
-      if (onDataChannel) onDataChannel(channel);
+      // Note: onDataChannel is NOT called here directly anymore.
+      // It will be called inside channel.onopen (set by setupDataChannel above).
     };
 
     return pc;
-  }, [roomId]);
-
-  const setupDataChannel = useCallback((channel: RTCDataChannel) => {
-    channel.onopen = () => {
-      setDataChannelState('open');
-    };
-    channel.onclose = () => {
-      setDataChannelState('closed');
-    };
-    channel.onerror = (err) => {
-      console.error('[webrtc] DataChannel error:', err);
-      setError('DataChannel error');
-    };
-  }, []);
+  }, [roomId, setupDataChannel]);
 
   const createDataChannel = useCallback(() => {
     const pc = createPeerConnection();
@@ -144,9 +152,10 @@ export function useWebRTC({ roomId, isSender, onDataChannel }: UseWebRTCOptions)
     });
     dcRef.current = channel;
     setupDataChannel(channel);
-    if (onDataChannel) onDataChannel(channel);
+    // FIX: removed the immediate onDataChannel(channel) call that was here.
+    // onDataChannel is now only called inside channel.onopen (in setupDataChannel).
     return channel;
-  }, [createPeerConnection, setupDataChannel, onDataChannel]);
+  }, [createPeerConnection, setupDataChannel]);
 
   const startConnection = useCallback(async () => {
     if (!roomId) return;
@@ -219,13 +228,12 @@ export function useWebRTC({ roomId, isSender, onDataChannel }: UseWebRTCOptions)
       socket.off('answer', handleAnswer);
       socket.off('ice-candidate', handleIceCandidate);
     };
-  }, [roomId, isSender, createPeerConnection, createDataChannel, setupDataChannel, flushCandidates]);
+  }, [roomId, isSender, createPeerConnection, createDataChannel, flushCandidates]);
 
-  useEffect(() => {
-    return () => {
-      cleanup();
-    };
-  }, [cleanup]);
+  // FIX: Don't run cleanup on unmount — the RTCPeerConnection must survive the
+  // navigation from Room -> Transfer. Transfer.tsx will close it when done.
+  // We only clean up if the component unmounts WITHOUT having navigated away
+  // (i.e. user cancelled), which is handled by Room's own useEffect cleanup.
 
   return {
     peerConnection: pcRef.current,

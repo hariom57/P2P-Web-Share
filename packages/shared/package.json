@@ -18,6 +18,9 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "vitest": "^1.6.0"
+    "vitest": "^4.1.8"
+  },
+  "dependencies": {
+    "vite": "^7.1.0"
   }
 }

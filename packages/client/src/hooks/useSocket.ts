@@ -1,19 +1,16 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { connectSocket, disconnectSocket, getSocket } from '../services/socket';
-import { useRoomStore } from '../stores/roomStore';
+import { useEffect, useCallback } from 'react';
+import { connectSocket, disconnectSocket } from '../services/socket';
 import { useConnectionStore } from '../stores/connectionStore';
 import { useTransferStore } from '../stores/transferStore';
+import { useRoomStore } from '../stores/roomStore';
 
+// This hook handles only socket events that are NOT managed by Room.tsx.
+// Room.tsx owns: room-joined, peer-joined, room-error, room-expired, room-created
+// Adding those here too causes duplicate handlers and double-fires on every signaling event.
 export function useSocket() {
-  const {
-    setRoomId,
-    setPeerConnected,
-    setRoomError,
-    setRoomPhase,
-  } = useRoomStore();
-
   const { setConnectionState } = useConnectionStore();
   const { setFileMetadata, setTransferPhase, setTransferError } = useTransferStore();
+  const { setRoomId, setRoomPhase } = useRoomStore();
 
   const cleanup = useCallback(() => {
     disconnectSocket();
@@ -27,31 +24,12 @@ export function useSocket() {
       setRoomPhase('waiting');
     });
 
-    socket.on('room-joined', (data: { roomId: string; peerCount: number }) => {
-      setRoomId(data.roomId);
-      setRoomPhase('connecting');
-    });
-
-    socket.on('peer-joined', () => {
-      setPeerConnected(true);
-      setRoomPhase('connecting');
-    });
-
     socket.on('peer-disconnected', () => {
-      setPeerConnected(false);
       setConnectionState('disconnected');
     });
 
     socket.on('file-metadata', (data: { fileName: string; fileSize: number; fileType: string }) => {
       setFileMetadata(data);
-    });
-
-    socket.on('room-error', (data: { code: string; message: string }) => {
-      setRoomError(data.message);
-    });
-
-    socket.on('room-expired', () => {
-      setRoomPhase('expired');
     });
 
     socket.on('transfer-complete', () => {

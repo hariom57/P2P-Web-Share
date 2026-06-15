@@ -1,13 +1,25 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { encodeMessage, decodeMessage, ProtocolError } from '@p2p-share/shared';
 import { MessageType, PROTOCOL_CONSTANTS } from '@p2p-share/shared';
-import type { DataChannelMessage, FileMetaMessage, BatchMetaMessage, BatchEndMessage } from '@p2p-share/shared';
+import type {
+  DataChannelMessage,
+  FileMetaMessage,
+  BatchMetaMessage,
+  BatchEndMessage,
+} from '@p2p-share/shared';
 import { FileChunker } from '../services/file-chunker';
 import { computeSHA256, computeSHA256FromChunks, areHashesEqual } from '../services/sha256';
 import { reassembleFile, triggerDownload } from '../services/file-download';
 import { encryptChunk, decryptChunk } from '../services/encryption';
 import { getEncryptionKey } from '../services/data-channel-registry';
-import { saveCheckpoint, deleteCheckpoint, getCheckpoint, saveChunk, loadAllChunks, deleteRoomChunks } from '../services/checkpoint-store';
+import {
+  saveCheckpoint,
+  deleteCheckpoint,
+  getCheckpoint,
+  saveChunk,
+  loadAllChunks,
+  deleteRoomChunks,
+} from '../services/checkpoint-store';
 import { useTransferStore } from '../stores/transferStore';
 import { useUIStore } from '../stores/uiStore';
 import { useHistoryStore } from '../stores/historyStore';
@@ -43,16 +55,19 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     roomIdRef.current = roomId;
   }, [roomId]);
 
-  const sendMessage = useCallback((msg: ArrayBuffer) => {
-    if (dataChannel?.readyState !== 'open') return false;
-    if (dataChannel.bufferedAmount > PROTOCOL_CONSTANTS.MAX_BUFFERED_AMOUNT) return false;
-    try {
-      dataChannel.send(msg);
-      return true;
-    } catch {
-      return false;
-    }
-  }, [dataChannel]);
+  const sendMessage = useCallback(
+    (msg: ArrayBuffer) => {
+      if (dataChannel?.readyState !== 'open') return false;
+      if (dataChannel.bufferedAmount > PROTOCOL_CONSTANTS.MAX_BUFFERED_AMOUNT) return false;
+      try {
+        dataChannel.send(msg);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [dataChannel],
+  );
 
   const waitForBufferedAmountLow = useCallback(() => {
     if (!dataChannel || dataChannel.bufferedAmount <= PROTOCOL_CONSTANTS.MAX_BUFFERED_AMOUNT) {
@@ -67,13 +82,19 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     });
   }, [dataChannel]);
 
-  async function sendSingleFile(file: File, fileIndex: number, totalFiles: number): Promise<boolean> {
+  async function sendSingleFile(
+    file: File,
+    fileIndex: number,
+    totalFiles: number,
+  ): Promise<boolean> {
     transferStore.setCurrentFileIndex(fileIndex);
     transferStore.setTransferPhase('hashing');
 
     const fileBuffer = await file.arrayBuffer();
     const fileHash = await computeSHA256(fileBuffer);
-    const fileHashHex = Array.from(fileHash).map((b) => b.toString(16).padStart(2, '0')).join('');
+    const fileHashHex = Array.from(fileHash)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
 
     const chunker = new FileChunker(file);
     chunkerRef.current = chunker;
@@ -133,10 +154,12 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     if (roomId && fileIndex === 0) {
       const cp = await getCheckpoint(roomId);
       if (cp && cp.lastAcknowledgedChunk > 0) {
-        dataChannel!.send(encodeMessage({
-          type: MessageType.RESUME,
-          lastAcknowledgedChunk: cp.lastAcknowledgedChunk,
-        }));
+        dataChannel!.send(
+          encodeMessage({
+            type: MessageType.RESUME,
+            lastAcknowledgedChunk: cp.lastAcknowledgedChunk,
+          }),
+        );
 
         const theirLastReceived = await new Promise<number>((resolve) => {
           resumeResolveRef.current = resolve;
@@ -217,10 +240,12 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
 
     transferStore.setTransferPhase('verifying');
 
-    dataChannel!.send(encodeMessage({
-      type: MessageType.VERIFY_REQUEST,
-      senderHash: fileHash,
-    }));
+    dataChannel!.send(
+      encodeMessage({
+        type: MessageType.VERIFY_REQUEST,
+        senderHash: fileHash,
+      }),
+    );
 
     const verifyResult = await new Promise<boolean>((resolve) => {
       verifyResolveRef.current = (match: boolean) => resolve(match);
@@ -272,62 +297,73 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     return false;
   }
 
-  const sendFiles = useCallback(async (files: File[]) => {
-    if (!dataChannel || dataChannel.readyState !== 'open') {
-      setError('DataChannel not open');
-      return;
-    }
-
-    cancelledRef.current = false;
-    setIsTransferring(true);
-    setError(null);
-    transferStore.setBatchFiles(files.map((f) => ({ name: f.name, size: f.size, type: f.type, transferred: false })));
-
-    const batchMeta: BatchMetaMessage = {
-      type: MessageType.BATCH_META,
-      files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
-    };
-    dataChannel.send(encodeMessage(batchMeta));
-
-    for (let i = 0; i < files.length; i++) {
-      if (cancelledRef.current) break;
-      if (i > 0) {
-        transferStore.resetFileProgress();
+  const sendFiles = useCallback(
+    async (files: File[]) => {
+      if (!dataChannel || dataChannel.readyState !== 'open') {
+        setError('DataChannel not open');
+        return;
       }
-      const ok = await sendSingleFile(files[i], i, files.length);
-      if (!ok) {
+
+      cancelledRef.current = false;
+      setIsTransferring(true);
+      setError(null);
+      transferStore.setBatchFiles(
+        files.map((f) => ({ name: f.name, size: f.size, type: f.type, transferred: false })),
+      );
+
+      const batchMeta: BatchMetaMessage = {
+        type: MessageType.BATCH_META,
+        files: files.map((f) => ({ name: f.name, size: f.size, type: f.type })),
+      };
+      dataChannel.send(encodeMessage(batchMeta));
+
+      for (let i = 0; i < files.length; i++) {
+        if (cancelledRef.current) break;
+        if (i > 0) {
+          transferStore.resetFileProgress();
+        }
+        const ok = await sendSingleFile(files[i], i, files.length);
+        if (!ok) {
+          setIsTransferring(false);
+          return;
+        }
+      }
+
+      if (cancelledRef.current) {
         setIsTransferring(false);
         return;
       }
-    }
 
-    if (cancelledRef.current) {
+      dataChannel.send(encodeMessage({ type: MessageType.BATCH_END }));
+
+      transferStore.setTransferPhase('complete');
+      const fileCount = files.length;
+      addNotification({
+        type: 'success',
+        title: fileCount > 1 ? `${fileCount} files transferred` : 'Transfer complete',
+        durationMs: 5000,
+      });
       setIsTransferring(false);
-      return;
-    }
-
-    dataChannel.send(encodeMessage({ type: MessageType.BATCH_END }));
-
-    transferStore.setTransferPhase('complete');
-    const fileCount = files.length;
-    addNotification({ type: 'success', title: fileCount > 1 ? `${fileCount} files transferred` : 'Transfer complete', durationMs: 5000 });
-    setIsTransferring(false);
-    if (roomIdRef.current) {
-      deleteCheckpoint(roomIdRef.current);
-      deleteRoomChunks(roomIdRef.current);
-    }
-  }, [dataChannel, transferStore, addNotification, sendMessage, waitForBufferedAmountLow]);
+      if (roomIdRef.current) {
+        deleteCheckpoint(roomIdRef.current);
+        deleteRoomChunks(roomIdRef.current);
+      }
+    },
+    [dataChannel, transferStore, addNotification, sendMessage, waitForBufferedAmountLow],
+  );
 
   const cancel = useCallback(() => {
     cancelledRef.current = true;
     chunkerRef.current?.abort();
     if (dataChannel?.readyState === 'open') {
       try {
-        dataChannel.send(encodeMessage({
-          type: MessageType.CANCEL,
-          reason: 0x0001,
-          message: 'User cancelled transfer',
-        }));
+        dataChannel.send(
+          encodeMessage({
+            type: MessageType.CANCEL,
+            reason: 0x0001,
+            message: 'User cancelled transfer',
+          }),
+        );
       } catch {
         /* ignore */
       }
@@ -347,7 +383,11 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         status: 'cancelled',
         sha256Hash: transferStore.sha256Hash,
         speedAvgBps: transferStore.averageSpeedBps,
-        startedAt: Date.now() - (transferStore.averageSpeedBps > 0 ? (transferStore.bytesTransferred / transferStore.averageSpeedBps) * 1000 : 0),
+        startedAt:
+          Date.now() -
+          (transferStore.averageSpeedBps > 0
+            ? (transferStore.bytesTransferred / transferStore.averageSpeedBps) * 1000
+            : 0),
         completedAt: Date.now(),
       });
       deleteCheckpoint(roomIdRef.current);
@@ -355,11 +395,11 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     }
   }, [dataChannel, transferStore]);
 
+  const receivedChunksRef = useRef<Map<number, Uint8Array>>(new Map());
   useEffect(() => {
     if (!dataChannel) return;
 
     dataChannel.binaryType = 'arraybuffer';
-    const receivedChunks = new Map<number, Uint8Array>();
 
     const handleClose = () => {
       cancelledRef.current = true;
@@ -381,15 +421,17 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
     dataChannel.addEventListener('error', handleError);
 
     const handleMessage = async (event: MessageEvent) => {
+      console.log('[MESSAGE RECEIVED]');
+
       if (!(event.data instanceof ArrayBuffer)) return;
 
       let msg: DataChannelMessage;
       try {
         msg = decodeMessage(event.data);
-      } catch (err: unknown) {
-        if (err instanceof ProtocolError) {
-          console.warn('[file-transfer] protocol error:', err.message);
-        }
+
+        console.log('[TYPE]', msg.type);
+      } catch (err) {
+        console.error(err);
         return;
       }
 
@@ -397,7 +439,12 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         case MessageType.BATCH_META: {
           batchModeRef.current = true;
           transferStore.setBatchFiles(
-            msg.files.map((f) => ({ name: f.name, size: f.size, type: f.type, transferred: false })),
+            msg.files.map((f) => ({
+              name: f.name,
+              size: f.size,
+              type: f.type,
+              transferred: false,
+            })),
           );
           break;
         }
@@ -418,13 +465,24 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         case MessageType.FILE_META: {
           fileMetaRef.current = msg;
           setReceivedFileMeta(msg);
+          transferStore.setFileMetadata({
+            fileName: msg.fileName,
+            fileSize: Number(msg.fileSize),
+            fileType: msg.mimeType,
+          });
+
+          transferStore.setProgress({
+            totalChunks: msg.totalChunks,
+            chunkSizeBytes: msg.chunkSize,
+            chunksReceived: 0,
+          });
           lastSpeedUpdateRef.current = Date.now();
           if (roomIdRef.current) {
             const cp = await getCheckpoint(roomIdRef.current);
             if (cp && cp.lastReceivedChunk > 0) {
               const stored = await loadAllChunks(roomIdRef.current);
               for (const [seq, data] of stored) {
-                receivedChunks.set(seq, data);
+                receivedChunksRef.current.set(seq, data);
               }
               const ackedChunks = cp.lastReceivedChunk + 1;
               const chunkSize = msg.chunkSize || transferStore.chunkSizeBytes;
@@ -441,11 +499,13 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
               chunkCountRef.current = ackedChunks;
             }
           }
-          dataChannel.send(encodeMessage({
-            type: MessageType.CHUNK_ACK,
-            sequence: 0,
-            status: 0x00,
-          }));
+          dataChannel.send(
+            encodeMessage({
+              type: MessageType.CHUNK_ACK,
+              sequence: 0,
+              status: 0x00,
+            }),
+          );
           break;
         }
 
@@ -457,7 +517,7 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
             if (lastReceived > 0) {
               const stored = await loadAllChunks(rid);
               for (const [seq, data] of stored) {
-                receivedChunks.set(seq, data);
+                receivedChunksRef.current.set(seq, data);
               }
               chunkCountRef.current = lastReceived + 1;
               transferStore.setProgress({
@@ -465,21 +525,26 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
                 lastAcknowledgedChunk: lastReceived,
               });
             }
-            dataChannel.send(encodeMessage({
-              type: MessageType.RESUME_ACK,
-              lastReceivedChunk: lastReceived,
-            }));
+            dataChannel.send(
+              encodeMessage({
+                type: MessageType.RESUME_ACK,
+                lastReceivedChunk: lastReceived,
+              }),
+            );
           } else {
-            dataChannel.send(encodeMessage({
-              type: MessageType.RESUME_ACK,
-              lastReceivedChunk: 0,
-            }));
+            dataChannel.send(
+              encodeMessage({
+                type: MessageType.RESUME_ACK,
+                lastReceivedChunk: 0,
+              }),
+            );
           }
           break;
         }
 
         case MessageType.CHUNK: {
-          receivedChunks.set(msg.sequence, msg.data);
+          receivedChunksRef.current.set(msg.sequence, msg.data);
+          console.log('[CHUNK RECEIVED]', msg.sequence, 'total=', receivedChunksRef.current.size);
           transferStore.incrementChunksReceived();
           const now = Date.now();
           transferStore.updateSpeed(msg.data.length, now - lastSpeedUpdateRef.current);
@@ -502,15 +567,18 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
               });
             }
           }
-          dataChannel.send(encodeMessage({
-            type: MessageType.CHUNK_ACK,
-            sequence: msg.sequence,
-            status: 0x00,
-          }));
+          dataChannel.send(
+            encodeMessage({
+              type: MessageType.CHUNK_ACK,
+              sequence: msg.sequence,
+              status: 0x00,
+            }),
+          );
           break;
         }
 
         case MessageType.CHUNK_ACK: {
+          console.log('[ACK]', msg.sequence);
           inFlightRef.current.delete(msg.sequence);
           transferStore.incrementChunksAcknowledged();
           transferStore.setProgress({ lastAcknowledgedChunk: msg.sequence });
@@ -531,12 +599,21 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
 
         case MessageType.VERIFY_REQUEST: {
           const meta = fileMetaRef.current;
+          console.log('[VERIFY REQUEST]');
+          console.log(
+            'senderHash=',
+            Array.from(msg.senderHash)
+              .map((b) => b.toString(16).padStart(2, '0'))
+              .join(''),
+          );
+          console.log('receivedChunks=', receivedChunksRef.current.size);
+          console.log('expectedChunks=', meta?.totalChunks);
           const key = getEncryptionKey();
           let match = false;
           if (meta) {
             const allChunks: Uint8Array[] = [];
             for (let i = 0; i < meta.totalChunks; i++) {
-              const raw = receivedChunks.get(i);
+              const raw = receivedChunksRef.current.get(i);
               if (raw) {
                 const decrypted = key ? await decryptChunk(raw, key, i) : raw;
                 allChunks.push(decrypted);
@@ -544,7 +621,21 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
             }
             if (allChunks.length === meta.totalChunks) {
               const receiverHash = await computeSHA256FromChunks(allChunks);
+              console.log(
+                'receiverHash=',
+                Array.from(receiverHash)
+                  .map((b) => b.toString(16).padStart(2, '0'))
+                  .join(''),
+              );
+
+              console.log(
+                'senderHash=',
+                Array.from(msg.senderHash)
+                  .map((b) => b.toString(16).padStart(2, '0'))
+                  .join(''),
+              );
               match = areHashesEqual(receiverHash, msg.senderHash);
+              console.log('[VERIFY RESULT]', match);
               if (match) {
                 if (!batchModeRef.current) {
                   transferStore.setTransferPhase('complete');
@@ -556,7 +647,11 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
                 const blob = reassembleFile(decryptedChunks, meta.totalChunks, meta.mimeType);
                 triggerDownload(blob, meta.fileName);
                 transferStore.setPreviewUrl(URL.createObjectURL(blob));
-                addNotification({ type: 'success', title: `Downloaded: ${meta.fileName}`, durationMs: 5000 });
+                addNotification({
+                  type: 'success',
+                  title: `Downloaded: ${meta.fileName}`,
+                  durationMs: 5000,
+                });
                 if (roomIdRef.current) {
                   saveHistoryEntry({
                     roomId: roomIdRef.current,
@@ -567,15 +662,25 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
                     totalChunks: meta.totalChunks,
                     chunksTransferred: meta.totalChunks,
                     status: 'completed',
-                    sha256Hash: transferStore.sha256Hash || Array.from(msg.senderHash).map((b) => b.toString(16).padStart(2, '0')).join(''),
+                    sha256Hash:
+                      transferStore.sha256Hash ||
+                      Array.from(msg.senderHash)
+                        .map((b) => b.toString(16).padStart(2, '0'))
+                        .join(''),
                     speedAvgBps: transferStore.averageSpeedBps,
-                    startedAt: Date.now() - (transferStore.averageSpeedBps > 0 ? (transferStore.bytesTransferred / transferStore.averageSpeedBps) * 1000 : 0),
+                    startedAt:
+                      Date.now() -
+                      (transferStore.averageSpeedBps > 0
+                        ? (transferStore.bytesTransferred / transferStore.averageSpeedBps) * 1000
+                        : 0),
                     completedAt: Date.now(),
                   });
                 }
               } else {
                 transferStore.setReceiverHash(
-                  Array.from(receiverHash).map((b) => b.toString(16).padStart(2, '0')).join(''),
+                  Array.from(receiverHash)
+                    .map((b) => b.toString(16).padStart(2, '0'))
+                    .join(''),
                 );
                 transferStore.setTransferPhase('error');
                 transferStore.setTransferError('Hash mismatch');
@@ -583,10 +688,12 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
               }
             }
           }
-          dataChannel.send(encodeMessage({
-            type: MessageType.VERIFY_RESPONSE,
-            match,
-          }));
+          dataChannel.send(
+            encodeMessage({
+              type: MessageType.VERIFY_RESPONSE,
+              match,
+            }),
+          );
           if (roomIdRef.current) {
             deleteRoomChunks(roomIdRef.current);
             deleteCheckpoint(roomIdRef.current);
@@ -595,6 +702,8 @@ export function useFileTransfer({ dataChannel, roomId = '' }: UseFileTransferOpt
         }
 
         case MessageType.VERIFY_RESPONSE: {
+          console.log('[VERIFY RESPONSE]', msg.match);
+
           if (verifyResolveRef.current) {
             verifyResolveRef.current(msg.match);
             verifyResolveRef.current = null;

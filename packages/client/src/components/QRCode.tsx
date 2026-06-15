@@ -15,8 +15,8 @@ function QRCode({ text, size = 180 }: QRCodeProps) {
       width: size,
       margin: 2,
       color: {
-        dark: '#ffffff',
-        light: 'transparent',
+        dark: '#000000',
+        light: '#FFFFFF',
       },
     });
   }, [text, size]);
