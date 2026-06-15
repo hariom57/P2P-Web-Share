@@ -66,51 +66,56 @@ function ResumePrompt({ roomId, onResume }: ResumePromptProps) {
   }, [roomId, setResumeAction, clearResumableTransfer]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-      <div className="bg-gray-900 rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl border border-gray-800">
-        <h3 className="text-lg font-semibold mb-2">Resume previous transfer?</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+      <div className="bg-gray-900 rounded-2xl p-6 max-w-sm w-full shadow-2xl border border-white/[0.08] animate-scale-in">
+        <div className="w-12 h-12 rounded-full bg-amber-500/20 flex items-center justify-center mx-auto mb-4">
+          <svg className="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </div>
+        <h3 className="text-lg font-semibold mb-4 text-center">Resume previous transfer?</h3>
 
-        <div className="space-y-2 text-sm text-gray-400 mb-4">
+        <div className="space-y-2.5 text-sm mb-4 bg-white/[0.03] rounded-xl p-4">
           <div className="flex justify-between">
-            <span>File</span>
-            <span className="text-white font-medium truncate ml-4 max-w-[200px]">{fileName}</span>
+            <span className="text-gray-400">File</span>
+            <span className="text-white font-medium truncate ml-4 max-w-[180px]">{fileName}</span>
           </div>
           <div className="flex justify-between">
-            <span>Size</span>
+            <span className="text-gray-400">Size</span>
             <span className="text-white font-medium">{formatSize(fileSize)}</span>
           </div>
           <div className="flex justify-between">
-            <span>Progress</span>
+            <span className="text-gray-400">Progress</span>
             <span className="text-white font-medium">{progressPercent}%</span>
           </div>
           <div className="flex justify-between">
-            <span>Activity</span>
+            <span className="text-gray-400">Activity</span>
             <span className="text-white font-medium">{timeAgo}</span>
           </div>
         </div>
 
-        <div className="w-full bg-gray-800 rounded-full h-2 mb-4 overflow-hidden">
+        <div className="w-full bg-white/[0.06] rounded-full h-2 mb-5 overflow-hidden">
           <div
-            className="h-2 rounded-full bg-blue-600 transition-all"
+            className="h-2 rounded-full bg-indigo-500 transition-all"
             style={{ width: `${progressPercent}%` }}
           />
         </div>
 
         <div className="flex gap-3">
           <button
-            className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
+            className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-all duration-200 active:scale-95 text-sm"
             onClick={handleResume}
           >
             Resume
           </button>
           <button
-            className="flex-1 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg font-medium transition-colors"
+            className="flex-1 py-2.5 bg-white/[0.06] hover:bg-white/[0.10] rounded-xl font-medium transition-all duration-200 active:scale-95 text-sm"
             onClick={handleDiscard}
           >
             Start Over
           </button>
         </div>
-        <p className="text-xs text-gray-600 text-center mt-3">
+        <p className="text-xs text-gray-600 text-center mt-3 font-light">
           {role === 'sender'
             ? 'Select the original file to resume sending'
             : 'Continue receiving the file'}

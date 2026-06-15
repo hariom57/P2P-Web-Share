@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { connectSocket } from '../services/socket';
 import { useRoomStore } from '../stores/roomStore';
@@ -36,9 +36,7 @@ function Room() {
   const navigate = useNavigate();
   const location = useLocation();
   const hasJoinedRef = useRef(false);
-  // Tracks whether we've navigated to /transfer yet (so we don't call cleanup on navigate)
   const hasNavigatedRef = useRef(false);
-  // Cleanup function returned by startConnection (removes offer/answer/ice listeners)
   const webrtcSignalingCleanupRef = useRef<(() => void) | null>(null);
 
   const fileState = location.state as {
@@ -53,8 +51,6 @@ function Room() {
   const { roomPhase, roomError, peerConnected } = useRoomStore();
   const { setRoomPhase, setPeerConnected, setRoomError } = useRoomStore();
 
-  // Called when the RTCDataChannel actually opens (not at creation time).
-  // This is the correct moment to navigate to /transfer.
   const onDataChannel = useCallback(
     (channel: RTCDataChannel) => {
       setActiveDataChannel(channel);
@@ -110,8 +106,6 @@ function Room() {
     setRoomError(null);
     hasJoinedRef.current = true;
 
-    // RECEIVER: Register WebRTC signaling listeners BEFORE emitting join-room.
-    // This ensures we don't miss an offer that arrives immediately after room-joined.
     if (!isSender) {
       startConnection().then((signalingCleanup) => {
         if (signalingCleanup) webrtcSignalingCleanupRef.current = signalingCleanup;
@@ -125,12 +119,10 @@ function Room() {
       socket.emit('join-room', { roomId: roomIdFull });
     }
 
-    // peer-joined is sent by the server to the SENDER when the receiver joins.
     const handlePeerJoined = async () => {
       setPeerConnected(true);
       setRoomPhase('connecting');
       if (isSender) {
-        // Clean up any previous signaling listeners before starting fresh
         if (webrtcSignalingCleanupRef.current) {
           webrtcSignalingCleanupRef.current();
           webrtcSignalingCleanupRef.current = null;
@@ -140,12 +132,7 @@ function Room() {
       }
     };
 
-    // room-joined is sent back to whoever just joined (both sender and receiver).
-    // Server sends: { roomId, peerCount }
     const handleRoomJoined = (data: { roomId: string; peerCount: number }) => {
-      // If peerCount >= 2 when the receiver joins, the sender is already waiting.
-      // The sender will get peer-joined and send the offer. Our signaling listeners
-      // were registered before this event (above), so we'll catch the offer.
       if (!isSender && data.peerCount >= 2) {
         setPeerConnected(true);
         setRoomPhase('connecting');
@@ -170,13 +157,10 @@ function Room() {
       socket.off('room-joined', handleRoomJoined);
       socket.off('room-error', handleRoomError);
       socket.off('room-expired', handleRoomExpired);
-      // Clean up signaling listeners
       if (webrtcSignalingCleanupRef.current) {
         webrtcSignalingCleanupRef.current();
         webrtcSignalingCleanupRef.current = null;
       }
-      // Only close the RTCPeerConnection if we have NOT navigated to /transfer.
-      // If we did navigate, Transfer.tsx now owns the connection.
       if (!hasNavigatedRef.current) {
         cleanup();
       }
@@ -191,9 +175,13 @@ function Room() {
     }
   }, []);
 
+  const [copied, setCopied] = useState(false);
+
   const copyRoomLink = useCallback(() => {
     const link = `${window.location.origin}/room/${roomIdFull}${window.location.hash}`;
     navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   }, [roomIdFull]);
 
   const status = () => {
@@ -202,24 +190,24 @@ function Room() {
     if (error || roomError)
       return { text: error || roomError || 'Error', color: 'text-red-400', dot: 'bg-red-500' };
     if (roomPhase === 'connected')
-      return { text: 'Connected', color: 'text-green-400', dot: 'bg-green-500' };
+      return { text: 'Connected', color: 'text-emerald-400', dot: 'bg-emerald-500' };
     if (peerConnected)
       return {
         text: 'Peer connected, connecting...',
-        color: 'text-yellow-400',
-        dot: 'bg-yellow-500 animate-pulse',
+        color: 'text-amber-400',
+        dot: 'bg-amber-500 animate-pulse',
       };
     if (roomPhase === 'waiting')
       return {
         text: 'Waiting for peer...',
-        color: 'text-yellow-400',
-        dot: 'bg-yellow-500 animate-pulse',
+        color: 'text-amber-400',
+        dot: 'bg-amber-500 animate-pulse-slow',
       };
     if (roomPhase === 'connecting')
       return {
         text: 'Connecting...',
-        color: 'text-yellow-400',
-        dot: 'bg-yellow-500 animate-pulse',
+        color: 'text-amber-400',
+        dot: 'bg-amber-500 animate-pulse',
       };
     return { text: 'Initializing...', color: 'text-gray-400', dot: 'bg-gray-500' };
   };
@@ -230,17 +218,26 @@ function Room() {
   if (roomPhase === 'connecting') {
     return (
       <div className="text-white flex items-center justify-center min-h-screen">
-        Connecting...
+        <div className="flex flex-col items-center gap-3">
+          <svg className="animate-spin h-8 w-8 text-indigo-400" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-gray-400 font-light">Connecting...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="text-white flex flex-col items-center justify-center min-h-screen p-4">
+    <div className="text-white flex flex-col items-center justify-center min-h-screen p-4 sm:p-6">
       <div className="text-center max-w-lg w-full">
-        <h2 className="text-2xl font-bold mb-2 animate-slide-up">Share Link</h2>
+        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium tracking-wide uppercase mb-4">
+          {isSender ? 'Sender' : 'Receiver'}
+        </div>
+        <h2 className="text-2xl sm:text-3xl font-bold mb-2 animate-slide-up tracking-tight">Share Link</h2>
         <p
-          className="text-gray-400 mb-6 text-sm animate-slide-up"
+          className="text-gray-400 mb-6 text-sm animate-slide-up font-light"
           style={{ animationDelay: '0.05s' }}
         >
           Share this link with the person you want to transfer to
@@ -248,19 +245,30 @@ function Room() {
 
         {isSender && (
           <div
-            className="flex items-center gap-2 bg-gray-900 rounded-lg p-3 mb-4 animate-slide-up"
+            className="flex items-center gap-2 bg-white/[0.06] border border-white/[0.08] rounded-xl p-1 mb-4 animate-slide-up"
             style={{ animationDelay: '0.1s' }}
           >
-            <div className="flex-1 min-w-0">
-              <code className="block text-blue-400 font-mono text-sm truncate">
+            <div className="flex-1 min-w-0 px-3">
+              <code className="block text-indigo-300 font-mono text-sm truncate">
                 {`${window.location.origin}/room/${roomIdFull}`}
               </code>
             </div>
             <button
-              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-sm font-medium transition-all duration-200 active:scale-95 whitespace-nowrap"
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 active:scale-95 whitespace-nowrap ${
+                copied
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-indigo-600 hover:bg-indigo-500'
+              }`}
               onClick={copyRoomLink}
             >
-              Copy
+              {copied ? (
+                <span className="flex items-center gap-1.5">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Copied
+                </span>
+              ) : 'Copy'}
             </button>
           </div>
         )}
@@ -270,7 +278,7 @@ function Room() {
             className="flex flex-col items-center gap-2 mb-4 animate-slide-up"
             style={{ animationDelay: '0.15s' }}
           >
-            <div className="bg-gray-900 rounded-lg p-3">
+            <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4">
               <QRCode
                 text={`${window.location.origin}/room/${roomIdFull}${window.location.hash}`}
               />
@@ -279,15 +287,15 @@ function Room() {
           </div>
         )}
 
-        <div className="flex items-center justify-center gap-2 mb-2">
-          <div className={`w-3 h-3 rounded-full ${s.dot}`} />
-          <span className={s.color}>{s.text}</span>
+        <div className="flex items-center justify-center gap-2.5 mb-3">
+          <span className={`w-2.5 h-2.5 rounded-full ${s.dot}`} />
+          <span className={`${s.color} text-sm font-medium`}>{s.text}</span>
         </div>
 
         {fingerprint && (
-          <div className="animate-slide-up" style={{ animationDelay: '0.2s' }}>
-            <p className="text-xs text-gray-600 mb-1">Encryption fingerprint</p>
-            <code className="font-mono text-xs text-gray-500 tracking-widest select-all">
+          <div className="animate-slide-up bg-white/[0.03] border border-white/[0.06] rounded-xl p-3" style={{ animationDelay: '0.2s' }}>
+            <p className="text-xs text-gray-500 mb-1.5 font-medium">Encryption fingerprint</p>
+            <code className="font-mono text-xs text-gray-400 tracking-widest select-all">
               {fingerprint}
             </code>
           </div>
@@ -297,23 +305,24 @@ function Room() {
           <div className="text-gray-500 text-sm mt-4">
             {fileState.files && fileState.files.length > 1 ? (
               <p>
-                Sending: <span className="text-gray-300">{fileState.files.length} files</span>
+                Sending: <span className="text-gray-300 font-medium">{fileState.files.length} files</span>
               </p>
             ) : fileState.fileName ? (
               <p>
-                Sending: <span className="text-gray-300">{fileState.fileName}</span>
+                Sending: <span className="text-gray-300 font-medium">{fileState.fileName}</span>
               </p>
             ) : null}
           </div>
         )}
 
         <button
-          className="mt-8 text-gray-500 hover:text-gray-300 text-sm underline"
-          onClick={() => {
-            navigate('/');
-          }}
+          className="mt-8 text-gray-500 hover:text-gray-300 text-sm transition-colors inline-flex items-center gap-1.5"
+          onClick={() => { navigate('/'); }}
         >
-          Cancel
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          </svg>
+          Back
         </button>
 
         {resumeAction === 'prompt' && roomIdFull && (

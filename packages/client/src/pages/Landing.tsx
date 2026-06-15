@@ -148,13 +148,16 @@ function Landing() {
   }, [isCreating, selectedFiles, navigate]);
 
   return (
-    <div className="text-white flex flex-col items-center justify-center min-h-screen p-4">
-      <div className="text-center max-w-lg w-full">
-        <h1 className="text-5xl font-bold mb-3 bg-gradient-to-r from-blue-400 via-purple-500 to-blue-400 bg-clip-text text-transparent animate-gradient-shift">
+    <div className="text-white flex flex-col items-center justify-center min-h-screen p-4 sm:p-6">
+      <div className="text-center max-w-lg w-full animate-fade-in">
+        <div className="mb-2 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium tracking-wide uppercase">
+          P2P Encrypted
+        </div>
+        <h1 className="text-5xl sm:text-6xl font-extrabold mb-3 bg-gradient-to-r from-indigo-400 via-violet-400 to-indigo-400 bg-clip-text text-transparent animate-gradient-shift leading-tight">
           P2P Web Share
         </h1>
-        <p className="text-gray-400 mb-8 text-lg animate-fade-in">
-          Direct browser-to-browser file transfer. No uploads. No servers.
+        <p className="text-gray-400 mb-8 text-base sm:text-lg animate-fade-in font-light">
+          Direct browser-to-browser file transfer. <br className="hidden sm:block" />No uploads. No servers.
         </p>
 
         <input
@@ -166,12 +169,12 @@ function Landing() {
         />
 
         <div
-          className={`border-2 border-dashed rounded-xl p-12 transition-colors cursor-pointer mb-6 ${
+          className={`relative rounded-2xl p-12 sm:p-16 transition-all duration-300 cursor-pointer mb-6 border-2 border-dashed ${
             isDragOver
-              ? 'border-blue-500 bg-blue-500/10'
+              ? 'border-indigo-400 bg-indigo-500/10 shadow-lg shadow-indigo-500/10'
               : selectedFiles.length > 0
-                ? 'border-green-500 bg-green-500/10'
-                : 'border-gray-700 hover:border-blue-500'
+                ? 'border-emerald-500/60 bg-emerald-500/10'
+                : 'border-white/10 hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06]'
           }`}
           onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
           onDragLeave={() => setIsDragOver(false)}
@@ -180,26 +183,33 @@ function Landing() {
         >
           {selectedFiles.length > 0 ? (
             <div>
-              <p className="text-green-400 text-lg font-semibold mb-2">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+                <svg className="w-6 h-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <p className="text-emerald-400 text-lg font-semibold mb-3">
                 {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
               </p>
-              <div className="max-h-40 overflow-y-auto space-y-1 mb-3">
+              <div className="max-h-32 overflow-y-auto space-y-1.5 mb-3 px-2">
                 {selectedFiles.map((f, i) => (
-                  <div key={`${f.name}-${f.size}`} className="flex items-center justify-between text-sm px-2">
+                  <div key={`${f.name}-${f.size}`} className="flex items-center justify-between text-sm py-1 px-3 rounded-lg bg-white/[0.04]">
                     <span className="text-gray-300 truncate mr-2 text-left flex-1">{f.name}</span>
-                    <span className="text-gray-500 whitespace-nowrap">{formatFileSize(f.size)}</span>
+                    <span className="text-gray-500 whitespace-nowrap text-xs">{formatFileSize(f.size)}</span>
                     <button
-                      className="ml-2 text-gray-600 hover:text-red-400 transition-colors"
+                      className="ml-2 text-gray-600 hover:text-red-400 transition-colors p-1"
                       onClick={(e) => { e.stopPropagation(); removeFile(i); }}
                       title="Remove"
                     >
-                      &times;
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
                     </button>
                   </div>
                 ))}
               </div>
               <button
-                className="text-sm text-gray-500 hover:text-gray-300 underline"
+                className="text-sm text-gray-500 hover:text-gray-300 transition-colors"
                 onClick={(e) => { e.stopPropagation(); setSelectedFiles([]); }}
               >
                 Clear All
@@ -207,37 +217,52 @@ function Landing() {
             </div>
           ) : (
           <div>
-            <div className="text-4xl mb-3 text-gray-600">&#8682;</div>
-            <p className="text-gray-500 text-lg">Drop your files here</p>
-            <p className="text-gray-600 text-sm mt-2">or click to browse (folders supported)</p>
+            <div className="w-14 h-14 rounded-full bg-white/[0.06] flex items-center justify-center mx-auto mb-4">
+              <svg className="w-7 h-7 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
+            </div>
+            <p className="text-gray-400 text-lg font-medium">Drop your files here</p>
+            <p className="text-gray-600 text-sm mt-2">or click to browse &middot; folders supported</p>
           </div>
           )}
         </div>
 
         {createError && (
-          <p className="text-red-400 text-sm mb-4">{createError}</p>
+          <p className="text-red-400 text-sm mb-4 bg-red-500/10 rounded-lg px-4 py-2 border border-red-500/20">{createError}</p>
         )}
 
-        <div className="mb-4">
-          <button
-            className="text-sm text-gray-500 hover:text-gray-300 underline transition-colors"
-            onClick={() => navigate('/history')}
-          >
-            Transfer History
-          </button>
-        </div>
-
         <button
-          className={`w-full py-3 px-6 rounded-lg font-semibold text-lg transition-all duration-200 ${
+          className={`w-full py-3.5 px-6 rounded-xl font-semibold text-base transition-all duration-200 tracking-wide ${
             selectedFiles.length > 0 && !isCreating
-              ? 'bg-blue-600 hover:bg-blue-700 text-white hover:animate-glow-pulse active:scale-[0.98]'
-              : 'bg-gray-800 text-gray-500 cursor-not-allowed'
+              ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/25 hover:shadow-indigo-500/40 active:scale-[0.98]'
+              : 'bg-white/[0.06] text-gray-500 cursor-not-allowed'
           }`}
           disabled={selectedFiles.length === 0 || isCreating}
           onClick={createRoom}
         >
-          {isCreating ? 'Creating room...' : 'Create Share Link'}
+          {isCreating ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Creating room...
+            </span>
+          ) : 'Create Share Link'}
         </button>
+
+        <div className="mt-6">
+          <button
+            className="text-sm text-gray-500 hover:text-gray-300 transition-colors inline-flex items-center gap-1.5"
+            onClick={() => navigate('/history')}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Transfer History
+          </button>
+        </div>
       </div>
     </div>
   );

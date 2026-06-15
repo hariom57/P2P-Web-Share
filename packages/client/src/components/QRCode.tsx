@@ -26,7 +26,7 @@ function QRCode({ text, size = 180 }: QRCodeProps) {
       ref={canvasRef}
       width={size}
       height={size}
-      className="inline-block"
+      className="inline-block rounded-lg"
     />
   );
 }

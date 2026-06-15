@@ -26,7 +26,7 @@ function App() {
     <BrowserRouter>
       <div className="relative min-h-screen">
         <NeonCursor />
-        <div className="relative z-10 min-h-screen bg-gray-950/85 backdrop-blur-[1px]">
+        <div className="relative z-10 min-h-screen bg-gray-950/70 backdrop-blur-sm">
           <AppContent />
         </div>
       </div>
